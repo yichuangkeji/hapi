@@ -43,7 +43,7 @@ export function App() {
 function AppInner() {
     const { t } = useTranslation()
     const { serverUrl, baseUrl, setServerUrl, clearServerUrl } = useServerUrl()
-    const { authSource, isLoading: isAuthSourceLoading, setAccessToken } = useAuthSource(baseUrl)
+    const { authSource, isLoading: isAuthSourceLoading, setAccessToken, clearAuth } = useAuthSource(baseUrl)
     const { token, api, isLoading: isAuthLoading, error: authError, needsBinding, bind } = useAuth(authSource, baseUrl)
     const goBack = useAppGoBack()
     const pathname = useLocation({ select: (location) => location.pathname })
@@ -113,6 +113,11 @@ function AppInner() {
         }
     }, [goBack, pathname])
     const queryClient = useQueryClient()
+    const signOut = useCallback(() => {
+        queryClient.clear()
+        clearAuth()
+    }, [clearAuth, queryClient])
+    const canSignOut = authSource?.type === 'accessToken'
     const sessionMatch = matchRoute({ to: '/sessions/$sessionId' })
     const selectedSessionId = sessionMatch && sessionMatch.sessionId !== 'new' ? sessionMatch.sessionId : null
     const { isSyncing, startSync, endSync } = useSyncingState()
@@ -338,7 +343,7 @@ function AppInner() {
     }
 
     return (
-        <AppContextProvider value={{ api, token, baseUrl }}>
+        <AppContextProvider value={{ api, token, baseUrl, canSignOut, signOut }}>
             <VoiceProvider>
                 <SyncingBanner isSyncing={isSyncing} />
                 <ReconnectingBanner

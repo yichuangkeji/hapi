@@ -19,6 +19,16 @@ See `src/configuration.ts` for all options.
 
 - `CLI_API_TOKEN` - Base shared secret used by CLI and web login. Clients append `:<namespace>` for isolation. Auto-generated on first run if not set.
 
+#### Multi-user namespaces
+
+Use one shared base token on the hub, then let each user log in with their own namespace suffix:
+
+- `CLI_API_TOKEN` on hub/server: `base-secret`
+- User A login token: `base-secret:alice`
+- User B login token: `base-secret:bob`
+
+Sessions, machines, SSE events, and push subscriptions are isolated by namespace.
+
 ### Optional (Telegram)
 
 - `TELEGRAM_BOT_TOKEN` - Token from @BotFather.

@@ -41,6 +41,16 @@ vi.mock('@/lib/languages', () => ({
     getLanguageDisplayName: (lang: { code: string | null; name: string }) => lang.name,
 }))
 
+vi.mock('@/lib/app-context', () => ({
+    useAppContext: () => ({
+        api: null,
+        token: 'test-token',
+        baseUrl: 'http://localhost:3006',
+        canSignOut: true,
+        signOut: vi.fn()
+    })
+}))
+
 function renderWithProviders(ui: React.ReactElement) {
     return render(
         <I18nProvider>

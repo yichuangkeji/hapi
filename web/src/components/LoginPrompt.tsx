@@ -23,6 +23,7 @@ export function LoginPrompt(props: LoginPromptProps) {
     const { t } = useTranslation()
     const isBindMode = props.mode === 'bind'
     const [accessToken, setAccessToken] = useState('')
+    const [namespace, setNamespace] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [isServerDialogOpen, setIsServerDialogOpen] = useState(false)
@@ -33,10 +34,15 @@ export function LoginPrompt(props: LoginPromptProps) {
         e.preventDefault()
 
         const trimmedToken = accessToken.trim()
+        const trimmedNamespace = namespace.trim()
         if (!trimmedToken) {
             setError(t('login.error.enterToken'))
             return
         }
+
+        const accessTokenWithNamespace = trimmedNamespace && !trimmedToken.includes(':')
+            ? `${trimmedToken}:${trimmedNamespace}`
+            : trimmedToken
 
         if (!isBindMode && props.requireServerUrl && !props.serverUrl) {
             setServerError(t('login.server.required'))
@@ -53,17 +59,17 @@ export function LoginPrompt(props: LoginPromptProps) {
                     setError(t('login.error.bindingUnavailable'))
                     return
                 }
-                await props.onBind(trimmedToken)
+                await props.onBind(accessTokenWithNamespace)
             } else {
                 // Validate token by attempting to authenticate
                 const client = new ApiClient('', { baseUrl: props.baseUrl })
-                await client.authenticate({ accessToken: trimmedToken })
+                await client.authenticate({ accessToken: accessTokenWithNamespace })
                 // If successful, pass token to parent
                 if (!props.onLogin) {
                     setError(t('login.error.loginUnavailable'))
                     return
                 }
-                props.onLogin(trimmedToken)
+                props.onLogin(accessTokenWithNamespace)
             }
         } catch (e) {
             const fallbackMessage = isBindMode ? t('login.error.bindFailed') : t('login.error.authFailed')
@@ -71,7 +77,7 @@ export function LoginPrompt(props: LoginPromptProps) {
         } finally {
             setIsLoading(false)
         }
-    }, [accessToken, props, t, isBindMode])
+    }, [accessToken, namespace, props, t, isBindMode])
 
     useEffect(() => {
         if (!isServerDialogOpen) {
@@ -137,6 +143,18 @@ export function LoginPrompt(props: LoginPromptProps) {
                             onChange={(e) => setAccessToken(e.target.value)}
                             placeholder={t('login.placeholder')}
                             autoComplete="current-password"
+                            disabled={isLoading}
+                            className="w-full px-3 py-2.5 rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] text-[var(--app-fg)] placeholder:text-[var(--app-hint)] focus:outline-none focus:ring-2 focus:ring-[var(--app-button)] focus:border-transparent disabled:opacity-50"
+                        />
+                    </div>
+
+                    <div>
+                        <input
+                            type="text"
+                            value={namespace}
+                            onChange={(e) => setNamespace(e.target.value)}
+                            placeholder={t('login.namespace.placeholder')}
+                            autoComplete="username"
                             disabled={isLoading}
                             className="w-full px-3 py-2.5 rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] text-[var(--app-fg)] placeholder:text-[var(--app-hint)] focus:outline-none focus:ring-2 focus:ring-[var(--app-button)] focus:border-transparent disabled:opacity-50"
                         />

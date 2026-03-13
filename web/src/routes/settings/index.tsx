@@ -4,6 +4,7 @@ import { useAppGoBack } from '@/hooks/useAppGoBack'
 import { getElevenLabsSupportedLanguages, getLanguageDisplayName, type Language } from '@/lib/languages'
 import { getFontScaleOptions, useFontScale, type FontScale } from '@/hooks/useFontScale'
 import { useAppearance, getAppearanceOptions, type AppearancePreference } from '@/hooks/useTheme'
+import { useAppContext } from '@/lib/app-context'
 import { PROTOCOL_VERSION } from '@hapi/protocol'
 
 const locales: { value: Locale; nativeLabel: string }[] = [
@@ -72,6 +73,7 @@ function ChevronDownIcon(props: { className?: string }) {
 
 export default function SettingsPage() {
     const { t, locale, setLocale } = useTranslation()
+    const { canSignOut, signOut } = useAppContext()
     const goBack = useAppGoBack()
     const [isOpen, setIsOpen] = useState(false)
     const [isAppearanceOpen, setIsAppearanceOpen] = useState(false)
@@ -399,6 +401,22 @@ export default function SettingsPage() {
                             )}
                         </div>
                     </div>
+
+                    {/* Account section */}
+                    {canSignOut && (
+                        <div className="border-b border-[var(--app-divider)]">
+                            <div className="px-3 py-2 text-xs font-semibold text-[var(--app-hint)] uppercase tracking-wide">
+                                {t('settings.account.title')}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={signOut}
+                                className="flex w-full items-center justify-between px-3 py-3 text-left transition-colors hover:bg-[var(--app-subtle-bg)]"
+                            >
+                                <span className="text-red-500">{t('settings.account.logout')}</span>
+                            </button>
+                        </div>
+                    )}
 
                     {/* About section */}
                     <div className="border-b border-[var(--app-divider)]">
