@@ -1,0 +1,81 @@
+# Common Commands
+
+Quick command set for daily HAPI usage.
+
+## 1. Configure hub address
+
+```bash
+export HAPI_API_URL="http://47.100.11.164:3006"
+```
+
+## 2. Login (CLI)
+
+```bash
+hapi auth login
+```
+
+Use token format with namespace for multi-user isolation:
+
+```text
+<base-token>:<namespace>
+```
+
+Example:
+
+```text
+_SZkoNfuKQOg57RPAF3-pbpLHmrcDut1a0LUcX8ihR0:alice
+```
+
+## 3. Check auth status
+
+```bash
+hapi auth status
+```
+
+## 4. Start session
+
+```bash
+hapi
+```
+
+Or start Codex mode:
+
+```bash
+hapi codex
+```
+
+## 5. Logout (CLI)
+
+```bash
+hapi auth logout
+unset CLI_API_TOKEN
+```
+
+Note: if token is exported in your shell profile (`~/.zshrc`, `~/.bashrc`), remove it there too.
+
+## 6. Logout (Web)
+
+Open **Settings → Account → Sign out**.
+
+If you are on an old web build without the sign-out button, clear local token in browser console:
+
+```js
+Object.keys(localStorage)
+  .filter((k) => k.startsWith('hapi_access_token::'))
+  .forEach((k) => localStorage.removeItem(k));
+location.reload();
+```
+
+## 7. Deploy to `aly`
+
+Full deploy:
+
+```bash
+./scripts/deploy_aly.sh
+```
+
+Skip build and deploy current binary:
+
+```bash
+SKIP_BUILD=1 ./scripts/deploy_aly.sh
+```
