@@ -107,6 +107,28 @@ sudo mv ./hapi /usr/local/bin/
 </details>
 
 <details>
+<summary>One-click install/update (auto detect system)</summary>
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yichuangkeji/hapi/main/scripts/install_hapi.sh | bash
+```
+
+Install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yichuangkeji/hapi/main/scripts/install_hapi.sh | bash -s -- --version v0.16.1-zqs.1
+```
+
+The script auto-detects macOS/Linux and `x64`/`arm64`, then installs to `~/.local/bin/hapi`.
+
+After installation, you can update in-place with:
+
+```bash
+hapi update
+```
+</details>
+
+<details>
 <summary>Build from source</summary>
 
 ```bash

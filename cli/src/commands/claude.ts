@@ -82,6 +82,7 @@ ${chalk.bold('Usage:')}
   hapi server            Alias for hapi hub
   hapi runner            Manage background service that allows
                             to spawn new sessions away from your computer
+  hapi update            One-click update from GitHub Release
   hapi doctor            System diagnostics & troubleshooting
 
 ${chalk.bold('Examples:')}

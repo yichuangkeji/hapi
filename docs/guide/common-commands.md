@@ -79,3 +79,41 @@ Skip build and deploy current binary:
 ```bash
 SKIP_BUILD=1 ./scripts/deploy_aly.sh
 ```
+
+## 8. Build + tag + push to `zqs` release
+
+```bash
+./scripts/release_zqs.sh 0.16.2-zqs.1
+```
+
+Optional:
+
+```bash
+SKIP_BUILD=1 ./scripts/release_zqs.sh 0.16.2-zqs.1
+```
+
+## 9. One-click install / update (auto detect OS + arch)
+
+Install latest:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yichuangkeji/hapi/main/scripts/install_hapi.sh | bash
+```
+
+Install a specific release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yichuangkeji/hapi/main/scripts/install_hapi.sh | bash -s -- --version v0.16.1-zqs.1
+```
+
+## 10. One-click update from installed CLI
+
+```bash
+hapi update
+```
+
+Update to specific version:
+
+```bash
+hapi update --version v0.16.1-zqs.1
+```

@@ -20,6 +20,7 @@ export default defineConfig({
     sidebar: [
       { text: 'Quick Start', link: '/guide/quick-start' },
       { text: 'Common Commands', link: '/guide/common-commands' },
+      { text: 'Namespace Login', link: '/guide/namespace-login' },
       { text: 'Installation', link: '/guide/installation' },
       { text: 'PWA', link: '/guide/pwa' },
       { text: 'How it Works', link: '/guide/how-it-works' },
