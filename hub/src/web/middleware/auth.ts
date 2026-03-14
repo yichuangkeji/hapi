@@ -38,6 +38,7 @@ export function createAuthMiddleware(jwtSecret: Uint8Array): MiddlewareHandler<W
                 return c.json({ error: 'Invalid token payload' }, 401)
             }
 
+            c.header('Vary', 'Authorization')
             c.set('userId', parsed.data.uid)
             c.set('namespace', parsed.data.ns)
             await next()

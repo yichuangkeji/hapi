@@ -123,7 +123,7 @@ function AppInner() {
             // Ignore storage errors
         }
         clearAuth()
-        window.history.replaceState(null, '', window.location.pathname)
+        window.history.replaceState(null, '', '/')
         window.location.reload()
     }, [clearAuth, queryClient])
     const canSignOut = authSource?.type === 'accessToken'
