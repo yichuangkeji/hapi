@@ -14,6 +14,7 @@ interface Settings {
   // This ID is used as the actual database ID on the server
   // All machine operations use this ID
   machineId?: string
+  machineRegistrationScope?: string
   machineIdConfirmedByServer?: boolean
   runnerAutoStartWhenRunningHappy?: boolean
   cliApiToken?: string
@@ -35,6 +36,9 @@ export interface RunnerLocallyPersistedState {
   startTime: string;
   startedWithCliVersion: string;
   startedWithCliMtimeMs?: number;
+  startedWithRunnerConnectionIdentity?: string;
+  startedWithNamespace?: string;
+  startedWithApiUrl?: string;
   lastHeartbeat?: string;
   runnerLogPath?: string;
 }

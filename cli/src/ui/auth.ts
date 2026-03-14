@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { configuration } from '@/configuration'
 import { updateSettings } from '@/persistence'
+import { getMachineRegistrationScope } from '@/utils/accessToken'
 
 export async function authAndSetupMachineIfNeeded(): Promise<{
     token: string
@@ -10,11 +11,13 @@ export async function authAndSetupMachineIfNeeded(): Promise<{
         throw new Error('CLI_API_TOKEN is required')
     }
 
+    const machineRegistrationScope = getMachineRegistrationScope(configuration.apiUrl, configuration.cliApiToken)
     const settings = await updateSettings((current) => {
-        if (!current.machineId) {
+        if (!current.machineId || current.machineRegistrationScope !== machineRegistrationScope) {
             return {
                 ...current,
-                machineId: randomUUID()
+                machineId: randomUUID(),
+                machineRegistrationScope
             }
         }
         return current
@@ -26,4 +29,3 @@ export async function authAndSetupMachineIfNeeded(): Promise<{
 
     return { token: configuration.cliApiToken, machineId: settings.machineId }
 }
-

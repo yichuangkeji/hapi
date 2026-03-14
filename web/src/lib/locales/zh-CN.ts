@@ -111,6 +111,7 @@ export default {
   'newSession.yolo': 'YOLO 模式',
   'newSession.yolo.title': '跳过审批和沙箱',
   'newSession.yolo.desc': '启动时使用危险的代理标志。',
+  'newSession.noMachinesHint': '当前命名空间下没有在线机器。请确认本地 runner 已使用同一个 token:namespace 登录；如果刚切换过命名空间，请重启 runner 并刷新页面。',
   'newSession.create': '创建',
   'newSession.creating': '创建中…',
 

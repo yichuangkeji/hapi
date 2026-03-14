@@ -11,6 +11,8 @@ import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { isBunCompiled, projectPath } from '@/projectPath';
 import { isProcessAlive, killProcess } from '@/utils/process';
+import { configuration } from '@/configuration';
+import { getRunnerConnectionIdentity } from '@/utils/accessToken';
 
 export function getInstalledCliMtimeMs(): number | undefined {
   if (isBunCompiled()) {
@@ -169,6 +171,26 @@ export async function isRunnerRunningCurrentlyInstalledHappyVersion(): Promise<b
   const state = await readRunnerState();
   if (!state) {
     logger.debug('[RUNNER CONTROL] No runner state found, returning false');
+    return false;
+  }
+
+  if (!state.startedWithRunnerConnectionIdentity) {
+    logger.debug('[RUNNER CONTROL] Runner state missing connection identity, forcing restart');
+    return false;
+  }
+
+  if (!configuration.cliApiToken) {
+    logger.debug('[RUNNER CONTROL] CLI_API_TOKEN missing, forcing runner restart');
+    return false;
+  }
+
+  const currentRunnerConnectionIdentity = getRunnerConnectionIdentity(configuration.apiUrl, configuration.cliApiToken);
+  if (state.startedWithRunnerConnectionIdentity !== currentRunnerConnectionIdentity) {
+    logger.debug('[RUNNER CONTROL] Runner connection identity changed, forcing restart', {
+      previousApiUrl: state.startedWithApiUrl,
+      previousNamespace: state.startedWithNamespace,
+      currentApiUrl: configuration.apiUrl
+    });
     return false;
   }
   

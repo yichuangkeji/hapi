@@ -40,6 +40,11 @@ export function MachineSelector(props: {
                     </option>
                 ))}
             </select>
+            {!props.isLoading && props.machines.length === 0 && (
+                <div className="text-xs leading-5 text-[var(--app-hint)]">
+                    {t('newSession.noMachinesHint')}
+                </div>
+            )}
         </div>
     )
 }

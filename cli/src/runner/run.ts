@@ -7,6 +7,7 @@ import { RunnerState, Metadata } from '@/api/types';
 import { SpawnSessionOptions, SpawnSessionResult } from '@/modules/common/rpcTypes';
 import { logger } from '@/ui/logger';
 import { authAndSetupMachineIfNeeded } from '@/ui/auth';
+import { configuration } from '@/configuration';
 import packageJson from '../../package.json';
 import { getEnvironmentInfo } from '@/ui/doctor';
 import { spawnHappyCLI } from '@/utils/spawnHappyCLI';
@@ -20,6 +21,7 @@ import { startRunnerControlServer } from './controlServer';
 import { createWorktree, removeWorktree, type WorktreeInfo } from './worktree';
 import { join } from 'path';
 import { buildMachineMetadata } from '@/agent/sessionFactory';
+import { getRunnerConnectionIdentity, resolveAccessTokenNamespace } from '@/utils/accessToken';
 
 export async function startRunner(): Promise<void> {
   // We don't have cleanup function at the time of server construction
@@ -618,6 +620,7 @@ export async function startRunner(): Promise<void> {
     });
 
     const startedWithCliMtimeMs = getInstalledCliMtimeMs();
+    const runnerConnectionIdentity = getRunnerConnectionIdentity(configuration.apiUrl, configuration.cliApiToken);
 
     // Write initial runner state (no lock needed for state file)
     const fileState: RunnerLocallyPersistedState = {
@@ -626,6 +629,9 @@ export async function startRunner(): Promise<void> {
       startTime: new Date().toLocaleString(),
       startedWithCliVersion: packageJson.version,
       startedWithCliMtimeMs,
+      startedWithRunnerConnectionIdentity: runnerConnectionIdentity,
+      startedWithNamespace: resolveAccessTokenNamespace(configuration.cliApiToken),
+      startedWithApiUrl: configuration.apiUrl,
       runnerLogPath: logger.logFilePath
     };
     writeRunnerState(fileState);

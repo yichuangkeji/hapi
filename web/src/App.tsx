@@ -126,8 +126,18 @@ function AppInner() {
     const syncTokenRef = useRef(0)
     const isFirstConnectRef = useRef(true)
     const baseUrlRef = useRef(baseUrl)
+    const authScopeRef = useRef<string | null>(null)
     const pushPromptedRef = useRef(false)
     const { isSupported: isPushSupported, permission: pushPermission, requestPermission, subscribe } = usePushNotifications(api)
+    const authScopeKey = useMemo(() => {
+        if (!authSource) {
+            return null
+        }
+        if (authSource.type === 'accessToken') {
+            return `access:${authSource.token}`
+        }
+        return `telegram:${authSource.initData}`
+    }, [authSource])
 
     useEffect(() => {
         if (baseUrlRef.current === baseUrl) {
@@ -138,6 +148,16 @@ function AppInner() {
         syncTokenRef.current = 0
         queryClient.clear()
     }, [baseUrl, queryClient])
+
+    useEffect(() => {
+        if (authScopeRef.current === authScopeKey) {
+            return
+        }
+        authScopeRef.current = authScopeKey
+        isFirstConnectRef.current = true
+        syncTokenRef.current = 0
+        queryClient.clear()
+    }, [authScopeKey, queryClient])
 
     // Clean up URL params after successful auth (for direct access links)
     useEffect(() => {
@@ -203,6 +223,7 @@ function AppInner() {
         }
         const invalidations = [
             queryClient.invalidateQueries({ queryKey: queryKeys.sessions }),
+            queryClient.invalidateQueries({ queryKey: queryKeys.machines }),
             ...(selectedSessionId ? [
                 queryClient.invalidateQueries({ queryKey: queryKeys.session(selectedSessionId) })
             ] : [])

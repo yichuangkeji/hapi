@@ -109,6 +109,7 @@ export default {
   'newSession.yolo': 'YOLO mode',
   'newSession.yolo.title': 'Bypass approvals and sandbox',
   'newSession.yolo.desc': 'Uses dangerous agent flags when spawning.',
+  'newSession.noMachinesHint': 'No online machines were found in this namespace. Make sure your local runner is connected with the same token:namespace; if you just switched namespaces, restart the runner and refresh this page.',
   'newSession.create': 'Create',
   'newSession.creating': 'Creating…',
 
