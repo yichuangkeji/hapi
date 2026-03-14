@@ -215,7 +215,10 @@ export async function bootstrapSession(options: SessionBootstrapOptions): Promis
 
     const session = api.sessionSyncClient(sessionInfo)
 
-    await reportSessionStarted(sessionInfo.id, metadata)
+    // Do not block session bootstrap on runner notification.
+    // RPC handlers are registered immediately after bootstrap returns; waiting here
+    // leaves a window where the session is already connected/alive but has no RPC handlers yet.
+    void reportSessionStarted(sessionInfo.id, metadata)
 
     return {
         api,

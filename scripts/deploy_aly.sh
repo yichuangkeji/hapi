@@ -24,6 +24,10 @@ require_cmd() {
     fi
 }
 
+remote_has_systemd_unit() {
+    ssh "${TARGET_HOST}" "systemctl list-unit-files 2>/dev/null | grep -q '^hapi\\.service'"
+}
+
 retry_healthcheck() {
     local max_attempts=20
     local attempt=1
@@ -61,8 +65,12 @@ deploy_binary() {
     scp "${LOCAL_BIN}" "${TARGET_HOST}:${REMOTE_TMP}"
 
     log "stop existing hapi hub"
-    ssh "${TARGET_HOST}" "pkill -f '^node /usr/bin/hapi hub$' || true"
-    ssh "${TARGET_HOST}" "pkill -f '^/usr/lib/node_modules/.*/hapi-linux-x64/bin/hapi hub$' || true"
+    if remote_has_systemd_unit; then
+        ssh "${TARGET_HOST}" "systemctl stop hapi || true"
+    else
+        ssh "${TARGET_HOST}" "pkill -f '^node /usr/bin/hapi hub$' || true"
+        ssh "${TARGET_HOST}" "pkill -f '^/usr/lib/node_modules/.*/hapi-linux-x64/bin/hapi hub$' || true"
+    fi
 
     log "install binary on ${TARGET_HOST}"
     ssh "${TARGET_HOST}" "mkdir -p \"$(dirname "${REMOTE_BIN}")\""
@@ -94,12 +102,20 @@ fs.writeFileSync(p, JSON.stringify(settings, null, 2) + \"\\n\");
 ' \"${REMOTE_SETTINGS}\" \"${REMOTE_LISTEN_HOST}\""
 
     log "start hapi hub"
-    ssh "${TARGET_HOST}" "nohup /usr/bin/hapi hub >\"${REMOTE_LOG}\" 2>&1 </dev/null &"
+    if remote_has_systemd_unit; then
+        ssh "${TARGET_HOST}" "systemctl daemon-reload && systemctl restart hapi"
+    else
+        ssh "${TARGET_HOST}" "nohup /usr/bin/hapi hub >\"${REMOTE_LOG}\" 2>&1 </dev/null &"
+    fi
 
     if retry_healthcheck; then
         log "health check passed"
         ssh "${TARGET_HOST}" "curl -fsS http://127.0.0.1:3006/health"
-        ssh "${TARGET_HOST}" "pgrep -af 'hapi hub' || true"
+        if remote_has_systemd_unit; then
+            ssh "${TARGET_HOST}" "systemctl --no-pager --full status hapi | sed -n '1,20p'"
+        else
+            ssh "${TARGET_HOST}" "pgrep -af 'hapi hub' || true"
+        fi
         return
     fi
 
