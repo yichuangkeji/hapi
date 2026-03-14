@@ -164,7 +164,14 @@ main() {
     trap 'rm -rf "$tmpdir"' EXIT
 
     local archive_file="${tmpdir}/hapi.tar.gz"
-    mapfile -t asset_candidates < <(build_asset_candidates "$os" "$arch")
+    local asset_candidates=()
+    local candidate
+    while IFS= read -r candidate; do
+        [[ -n "$candidate" ]] && asset_candidates+=("$candidate")
+    done <<EOF
+$(build_asset_candidates "$os" "$arch")
+EOF
+
     local selected_asset
     selected_asset="$(download_release_asset "$REPO" "$version" "$archive_file" "${asset_candidates[@]}")"
 
