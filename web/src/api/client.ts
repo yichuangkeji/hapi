@@ -274,6 +274,13 @@ export class ApiClient {
         return response.sessionId
     }
 
+    async clearSessionConversation(sessionId: string): Promise<void> {
+        await this.request(`/api/sessions/${encodeURIComponent(sessionId)}/clear`, {
+            method: 'POST',
+            body: JSON.stringify({})
+        })
+    }
+
     async sendMessage(sessionId: string, text: string, localId?: string | null, attachments?: AttachmentMetadata[]): Promise<void> {
         await this.request(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, {
             method: 'POST',

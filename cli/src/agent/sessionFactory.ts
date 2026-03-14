@@ -22,6 +22,7 @@ export type SessionBootstrapOptions = {
     workingDirectory?: string
     tag?: string
     agentState?: AgentState | null
+    resumeSessionId?: string | null
 }
 
 export type SessionBootstrapResult = {
@@ -104,6 +105,44 @@ export function buildSessionMetadata(options: {
     }
 }
 
+function getConversationTokenField(flavor: string): keyof Metadata | null {
+    switch (flavor) {
+        case 'claude':
+            return 'claudeSessionId'
+        case 'codex':
+            return 'codexSessionId'
+        case 'gemini':
+            return 'geminiSessionId'
+        case 'opencode':
+            return 'opencodeSessionId'
+        case 'cursor':
+            return 'cursorSessionId'
+        default:
+            return null
+    }
+}
+
+export function shouldResetStaleSessionConversation(args: {
+    flavor: string
+    session: Session
+    resumeSessionId?: string | null
+}): boolean {
+    if (args.resumeSessionId) {
+        return false
+    }
+    if (args.session.active) {
+        return false
+    }
+
+    const tokenField = getConversationTokenField(args.flavor)
+    if (!tokenField) {
+        return false
+    }
+
+    const metadata = args.session.metadata
+    return Boolean(metadata && typeof metadata[tokenField] === 'string' && metadata[tokenField])
+}
+
 async function getMachineIdOrExit(): Promise<string> {
     const settings = await readSettings()
     const machineId = settings?.machineId
@@ -153,11 +192,26 @@ export async function bootstrapSession(options: SessionBootstrapOptions): Promis
         machineId
     })
 
-    const sessionInfo = await api.getOrCreateSession({
+    let sessionInfo = await api.getOrCreateSession({
         tag: sessionTag,
         metadata,
         state: agentState
     })
+
+    if (shouldResetStaleSessionConversation({
+        flavor: options.flavor,
+        session: sessionInfo,
+        resumeSessionId: options.resumeSessionId
+    })) {
+        sessionInfo = await api.resetSessionConversation({
+            sessionId: sessionInfo.id,
+            metadata: {
+                ...metadata,
+                name: typeof sessionInfo.metadata?.name === 'string' ? sessionInfo.metadata.name : undefined
+            },
+            state: agentState
+        })
+    }
 
     const session = api.sessionSyncClient(sessionInfo)
 

@@ -8,6 +8,7 @@
  */
 
 import type { DecryptedMessage, ModelMode, PermissionMode, Session, SyncEvent } from '@hapi/protocol/types'
+import { randomUUID } from 'node:crypto'
 import type { Server } from 'socket.io'
 import type { Store } from '../store'
 import type { RpcRegistry } from '../socket/rpcRegistry'
@@ -42,12 +43,49 @@ export type ResumeSessionResult =
     | { type: 'success'; sessionId: string }
     | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'no_machine_online' | 'resume_unavailable' | 'resume_failed' }
 
+function buildClearedSessionMetadata(session: Session): Session['metadata'] {
+    const metadata = session.metadata
+    if (!metadata) {
+        return metadata
+    }
+
+    const next: Record<string, unknown> = { ...metadata }
+    delete next.summary
+    delete next.claudeSessionId
+    delete next.codexSessionId
+    delete next.geminiSessionId
+    delete next.opencodeSessionId
+    delete next.cursorSessionId
+    delete next.archivedBy
+    delete next.archiveReason
+
+    if (session.active) {
+        next.lifecycleState = 'running'
+        next.lifecycleStateSince = Date.now()
+    }
+
+    return next as Session['metadata']
+}
+
+function buildClearedAgentState(session: Session): Session['agentState'] {
+    const agentState = session.agentState
+    if (!agentState) {
+        return agentState
+    }
+
+    const next: Record<string, unknown> = { ...agentState }
+    delete next.requests
+    delete next.completedRequests
+    return next as Session['agentState']
+}
+
 export class SyncEngine {
     private readonly eventPublisher: EventPublisher
     private readonly sessionCache: SessionCache
     private readonly machineCache: MachineCache
     private readonly messageService: MessageService
     private readonly rpcGateway: RpcGateway
+    private readonly io: Server
     private inactivityTimer: NodeJS.Timeout | null = null
 
     constructor(
@@ -61,6 +99,7 @@ export class SyncEngine {
         this.machineCache = new MachineCache(store, this.eventPublisher)
         this.messageService = new MessageService(store, io, this.eventPublisher)
         this.rpcGateway = new RpcGateway(io, rpcRegistry)
+        this.io = io
         this.reloadAll()
         this.inactivityTimer = setInterval(() => this.expireInactive(), 5_000)
     }
@@ -275,6 +314,47 @@ export class SyncEngine {
 
     async deleteSession(sessionId: string): Promise<void> {
         await this.sessionCache.deleteSession(sessionId)
+    }
+
+    async resetSessionConversation(
+        sessionId: string,
+        options?: {
+            metadata?: unknown
+            agentState?: unknown
+            notifyRuntime?: boolean
+        }
+    ): Promise<void> {
+        const session = this.getSession(sessionId)
+        if (!session) {
+            throw new Error('Session not found')
+        }
+
+        if (options?.notifyRuntime && session.active) {
+            await this.rpcGateway.resetConversation(sessionId)
+        }
+
+        const refreshed = await this.sessionCache.resetSessionConversation(sessionId, {
+            metadata: options?.metadata ?? buildClearedSessionMetadata(session),
+            agentState: options?.agentState ?? buildClearedAgentState(session)
+        })
+
+        this.io.of('/cli').to(`session:${sessionId}`).emit('update', {
+            id: randomUUID(),
+            seq: Date.now(),
+            createdAt: Date.now(),
+            body: {
+                t: 'update-session' as const,
+                sid: sessionId,
+                metadata: {
+                    version: refreshed.metadataVersion,
+                    value: refreshed.metadata
+                },
+                agentState: {
+                    version: refreshed.agentStateVersion,
+                    value: refreshed.agentState
+                }
+            }
+        })
     }
 
     async applySessionConfig(

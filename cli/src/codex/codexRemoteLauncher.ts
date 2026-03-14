@@ -44,6 +44,8 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
     private abortController: AbortController = new AbortController();
     private currentThreadId: string | null = null;
     private currentTurnId: string | null = null;
+    private resetConversationCallback: (() => Promise<void>) | null = null;
+    private suppressNextAbortMessage = false;
 
     constructor(session: CodexSession) {
         super(process.env.DEBUG ? session.logPath : undefined);
@@ -612,6 +614,25 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
             readyAfterTurnTimer.unref?.();
         };
 
+        this.resetConversationCallback = async () => {
+            logger.debug('[Codex] Reset conversation requested');
+            this.suppressNextAbortMessage = session.thinking || this.currentTurnId !== null;
+            await this.handleAbort();
+            if (!useAppServer) {
+                mcpClient?.clearSession();
+            }
+            wasCreated = false;
+            currentModeHash = null;
+            pending = null;
+            first = true;
+            this.currentThreadId = null;
+            this.currentTurnId = null;
+            session.clearSessionId();
+            session.onThinkingChange(false);
+            messageBuffer.addMessage('Conversation reset. Next message starts a new Codex thread.', 'status');
+        };
+        session.addResetConversationCallback(this.resetConversationCallback);
+
         while (!this.shouldExit) {
             logActiveHandles('loop-top');
             let message: { message: string; mode: EnhancedMode; isolate: boolean; hash: string } | null = pending;
@@ -775,8 +796,12 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
                 }
 
                 if (isAbortError) {
-                    messageBuffer.addMessage('Aborted by user', 'status');
-                    session.sendSessionEvent({ type: 'message', message: 'Aborted by user' });
+                    if (!this.suppressNextAbortMessage) {
+                        messageBuffer.addMessage('Aborted by user', 'status');
+                        session.sendSessionEvent({ type: 'message', message: 'Aborted by user' });
+                    } else {
+                        this.suppressNextAbortMessage = false;
+                    }
                     if (!useAppServer) {
                         wasCreated = false;
                         currentModeHash = null;
@@ -826,6 +851,10 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
         }
 
         this.clearAbortHandlers(this.session.client.rpcHandlerManager);
+        if (this.resetConversationCallback) {
+            this.session.removeResetConversationCallback(this.resetConversationCallback);
+            this.resetConversationCallback = null;
+        }
 
         if (this.happyServer) {
             this.happyServer.stop();

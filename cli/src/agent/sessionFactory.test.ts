@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
-import { createWorkspaceSessionTag } from './sessionFactory'
+import type { Session } from '@/api/types'
+import { createWorkspaceSessionTag, shouldResetStaleSessionConversation } from './sessionFactory'
 
 describe('createWorkspaceSessionTag', () => {
     it('returns a stable tag for the same workspace path', () => {
@@ -30,5 +31,76 @@ describe('createWorkspaceSessionTag', () => {
         const second = createWorkspaceSessionTag('claude', otherPath)
 
         expect(first).not.toBe(second)
+    })
+})
+
+function createSession(overrides?: Partial<Session>): Session {
+    return {
+        id: 'session-1',
+        namespace: 'default',
+        seq: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        active: false,
+        activeAt: 1,
+        metadata: {
+            path: '/tmp/project',
+            host: 'localhost'
+        },
+        metadataVersion: 1,
+        agentState: null,
+        agentStateVersion: 1,
+        thinking: false,
+        thinkingAt: 1,
+        ...overrides
+    }
+}
+
+describe('shouldResetStaleSessionConversation', () => {
+    it('resets a reused inactive codex session with an existing conversation token', () => {
+        const session = createSession({
+            metadata: {
+                path: '/tmp/project',
+                host: 'localhost',
+                codexSessionId: 'thread_123'
+            }
+        })
+
+        expect(shouldResetStaleSessionConversation({
+            flavor: 'codex',
+            session
+        })).toBe(true)
+    })
+
+    it('does not reset when explicitly resuming', () => {
+        const session = createSession({
+            metadata: {
+                path: '/tmp/project',
+                host: 'localhost',
+                codexSessionId: 'thread_123'
+            }
+        })
+
+        expect(shouldResetStaleSessionConversation({
+            flavor: 'codex',
+            session,
+            resumeSessionId: 'thread_123'
+        })).toBe(false)
+    })
+
+    it('does not reset active sessions', () => {
+        const session = createSession({
+            active: true,
+            metadata: {
+                path: '/tmp/project',
+                host: 'localhost',
+                codexSessionId: 'thread_123'
+            }
+        })
+
+        expect(shouldResetStaleSessionConversation({
+            flavor: 'codex',
+            session
+        })).toBe(false)
     })
 })

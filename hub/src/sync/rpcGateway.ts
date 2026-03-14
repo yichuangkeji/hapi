@@ -103,6 +103,10 @@ export class RpcGateway {
         await this.sessionRpc(sessionId, 'killSession', {})
     }
 
+    async resetConversation(sessionId: string): Promise<void> {
+        await this.sessionRpc(sessionId, 'reset-conversation', {})
+    }
+
     async spawnSession(
         machineId: string,
         directory: string,

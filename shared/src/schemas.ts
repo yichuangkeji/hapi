@@ -205,6 +205,10 @@ export const SyncEventSchema = z.discriminatedUnion('type', [
         type: z.literal('session-removed'),
         sessionId: z.string()
     }),
+    SessionEventBaseSchema.extend({
+        type: z.literal('session-cleared'),
+        sessionId: z.string()
+    }),
     SessionChangedSchema.extend({
         type: z.literal('message-received'),
         message: DecryptedMessageSchema

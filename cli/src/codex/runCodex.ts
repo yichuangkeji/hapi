@@ -33,7 +33,8 @@ export async function runCodex(opts: {
         flavor: 'codex',
         startedBy,
         workingDirectory,
-        agentState: state
+        agentState: state,
+        resumeSessionId: opts.resumeSessionId ?? null
     });
 
     const startingMode: 'local' | 'remote' = startedBy === 'runner' ? 'remote' : 'local';
@@ -130,6 +131,15 @@ export async function runCodex(opts: {
 
         syncSessionMode();
         return { applied: { permissionMode: currentPermissionMode, collaborationMode: currentCollaborationMode } };
+    });
+
+    session.rpcHandlerManager.registerHandler('reset-conversation', async () => {
+        if (sessionWrapperRef.current) {
+            await sessionWrapperRef.current.resetConversation();
+        } else {
+            session.resetConversationState();
+        }
+        return { ok: true };
     });
 
     try {

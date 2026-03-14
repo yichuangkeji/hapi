@@ -29,7 +29,8 @@ import { useSendMessage } from '@/hooks/mutations/useSendMessage'
 import { queryKeys } from '@/lib/query-keys'
 import { useToast } from '@/lib/toast-context'
 import { useTranslation } from '@/lib/use-translation'
-import { fetchLatestMessages, seedMessageWindowFromSession } from '@/lib/message-window-store'
+import { clearMessageWindow, fetchLatestMessages, seedMessageWindowFromSession } from '@/lib/message-window-store'
+import type { AttachmentMetadata } from '@/types/api'
 import FilesPage from '@/routes/sessions/files'
 import FilePage from '@/routes/sessions/file'
 import TerminalPage from '@/routes/sessions/terminal'
@@ -266,6 +267,33 @@ function SessionPage() {
 
     // Get agent type from session metadata for slash commands
     const agentType = session?.metadata?.flavor ?? 'claude'
+
+    const handleSend = useCallback((text: string, attachments?: AttachmentMetadata[]) => {
+        const trimmed = text.trim()
+        if (agentType === 'codex' && trimmed === '/clear' && (!attachments || attachments.length === 0)) {
+            void (async () => {
+                if (!api || !sessionId) {
+                    return
+                }
+                try {
+                    await api.clearSessionConversation(sessionId)
+                    clearMessageWindow(sessionId)
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) })
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : 'Clear failed'
+                    addToast({
+                        title: 'Clear failed',
+                        body: message,
+                        sessionId,
+                        url: ''
+                    })
+                }
+            })()
+            return
+        }
+
+        sendMessage(text, attachments)
+    }, [addToast, agentType, api, queryClient, sendMessage, sessionId])
     const {
         getSuggestions: getSlashSuggestions,
     } = useSlashCommands(api, sessionId, agentType)
@@ -308,7 +336,7 @@ function SessionPage() {
             onBack={goBack}
             onRefresh={refreshSelectedSession}
             onLoadMore={loadMoreMessages}
-            onSend={sendMessage}
+            onSend={handleSend}
             onFlushPending={flushPending}
             onAtBottomChange={setAtBottom}
             onRetryMessage={retryMessage}

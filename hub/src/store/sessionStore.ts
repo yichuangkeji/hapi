@@ -4,6 +4,7 @@ import type { StoredSession, VersionedUpdateResult } from './types'
 import {
     deleteSession,
     getOrCreateSession,
+    resetSessionConversation,
     getSession,
     getSessionByNamespace,
     getSessions,
@@ -70,5 +71,14 @@ export class SessionStore {
 
     deleteSession(id: string, namespace: string): boolean {
         return deleteSession(this.db, id, namespace)
+    }
+
+    resetSessionConversation(
+        id: string,
+        namespace: string,
+        metadata: unknown,
+        agentState: unknown
+    ): StoredSession | null {
+        return resetSessionConversation(this.db, id, namespace, metadata, agentState)
     }
 }

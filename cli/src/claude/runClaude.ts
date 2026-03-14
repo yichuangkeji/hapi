@@ -49,7 +49,8 @@ export async function runClaude(options: StartOptions = {}): Promise<void> {
         flavor: 'claude',
         startedBy,
         workingDirectory,
-        agentState: initialState
+        agentState: initialState,
+        resumeSessionId: options.claudeArgs?.includes('--resume') ? '__resume__' : null
     });
     logger.debug(`Session created: ${sessionInfo.id}`);
 

@@ -333,3 +333,57 @@ export function deleteSession(db: Database, id: string, namespace: string): bool
     ).run(id, namespace)
     return result.changes > 0
 }
+
+export function resetSessionConversation(
+    db: Database,
+    id: string,
+    namespace: string,
+    metadata: unknown,
+    agentState: unknown
+): StoredSession | null {
+    const now = Date.now()
+    const metadataJson = JSON.stringify(metadata)
+    const agentStateJson = agentState === null || agentState === undefined ? null : JSON.stringify(agentState)
+
+    try {
+        db.exec('BEGIN')
+
+        db.prepare(
+            'DELETE FROM messages WHERE session_id = ?'
+        ).run(id)
+
+        const result = db.prepare(`
+            UPDATE sessions
+            SET metadata = @metadata,
+                metadata_version = metadata_version + 1,
+                agent_state = @agent_state,
+                agent_state_version = agent_state_version + 1,
+                todos = NULL,
+                todos_updated_at = NULL,
+                team_state = NULL,
+                team_state_updated_at = NULL,
+                updated_at = @updated_at,
+                seq = seq + 1
+            WHERE id = @id
+              AND namespace = @namespace
+        `).run({
+            id,
+            namespace,
+            metadata: metadataJson,
+            agent_state: agentStateJson,
+            updated_at: now
+        })
+
+        if (result.changes !== 1) {
+            db.exec('ROLLBACK')
+            return null
+        }
+
+        db.exec('COMMIT')
+    } catch (error) {
+        db.exec('ROLLBACK')
+        throw error
+    }
+
+    return getSessionByNamespace(db, id, namespace)
+}
