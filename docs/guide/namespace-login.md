@@ -63,18 +63,41 @@ hapi auth status
 - `Token Source`（建议是 `settings file`）
 - `Machine ID` 是否已生成
 
-## 5. 启动并注册 runner
+## 5. 登录后必须启动 runner（每台机器都要执行）
 
 ```bash
 hapi runner stop
+hapi runner start
+hapi runner status
+```
+
+说明：
+
+- 只执行 `hapi auth login` 不够，**不启动 runner 就不会有在线机器**。
+- 你有几台电脑，就要在每台电脑上各执行一次这一步。
+- 如果跳过这一步，Web 的 `Create Session` 会看到 `No machines available`。
+
+如果你希望立即开一个本地会话，也可以直接执行：
+
+```bash
 hapi
 ```
 
-首次启动后，机器会注册到你的 namespace 下。
+这会同时触发机器注册和会话启动。
 
 ## 6. Web 登录
 
 Web 端也必须输入同一个 `base:namespace`，否则会进错工作区。
+
+## 7. 验证机器是否已进入当前 namespace
+
+打开 Web 的 `Create Session` 页面，`Machine` 下拉里应出现当前机器。
+如果没有，回到本机再执行一次：
+
+```bash
+hapi runner stop
+hapi runner start
+```
 
 ## 常见问题
 
