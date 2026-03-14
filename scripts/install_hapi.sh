@@ -5,6 +5,7 @@ REPO="${REPO:-yichuangkeji/hapi}"
 INSTALL_DIR_DEFAULT="${HOME}/.local/bin"
 INSTALL_DIR="${INSTALL_DIR:-${INSTALL_DIR_DEFAULT}}"
 VERSION_INPUT="${VERSION:-latest}"
+TMPDIR_TO_CLEAN=""
 
 log() {
     printf '[install-hapi] %s\n' "$*"
@@ -13,6 +14,12 @@ log() {
 die() {
     printf '[install-hapi] ERROR: %s\n' "$*" >&2
     exit 1
+}
+
+cleanup() {
+    if [[ -n "${TMPDIR_TO_CLEAN}" ]]; then
+        rm -rf "${TMPDIR_TO_CLEAN}" || true
+    fi
 }
 
 usage() {
@@ -161,7 +168,8 @@ main() {
 
     local tmpdir
     tmpdir="$(mktemp -d)"
-    trap 'rm -rf "$tmpdir"' EXIT
+    TMPDIR_TO_CLEAN="${tmpdir}"
+    trap cleanup EXIT
 
     local archive_file="${tmpdir}/hapi.tar.gz"
     local asset_candidates=()
