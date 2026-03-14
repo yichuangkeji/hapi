@@ -115,7 +115,16 @@ function AppInner() {
     const queryClient = useQueryClient()
     const signOut = useCallback(() => {
         queryClient.clear()
+        try {
+            Object.keys(localStorage)
+                .filter((key) => key.startsWith('hapi_access_token::'))
+                .forEach((key) => localStorage.removeItem(key))
+        } catch {
+            // Ignore storage errors
+        }
         clearAuth()
+        window.history.replaceState(null, '', window.location.pathname)
+        window.location.reload()
     }, [clearAuth, queryClient])
     const canSignOut = authSource?.type === 'accessToken'
     const sessionMatch = matchRoute({ to: '/sessions/$sessionId' })

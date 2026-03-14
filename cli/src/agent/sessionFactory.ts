@@ -1,5 +1,6 @@
 import os from 'node:os'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { ApiClient } from '@/api/api'
@@ -31,6 +32,34 @@ export type SessionBootstrapResult = {
     machineId: string
     startedBy: SessionStartedBy
     workingDirectory: string
+}
+
+function normalizeWorkspacePath(workingDirectory: string): string {
+    const resolvedPath = resolve(workingDirectory)
+    let canonicalPath = resolvedPath
+    try {
+        canonicalPath = realpathSync.native(resolvedPath)
+    } catch {
+        // Keep resolved path when realpath fails.
+    }
+
+    const slashNormalized = canonicalPath.replace(/\\/g, '/')
+    const withoutTrailingSlash = slashNormalized.length > 1
+        ? slashNormalized.replace(/\/+$/, '')
+        : slashNormalized
+
+    if (process.platform === 'win32') {
+        return withoutTrailingSlash.toLowerCase()
+    }
+    return withoutTrailingSlash
+}
+
+export function createWorkspaceSessionTag(flavor: string, workingDirectory: string): string {
+    const normalizedPath = normalizeWorkspacePath(workingDirectory)
+    const digest = createHash('sha256')
+        .update(JSON.stringify({ flavor, path: normalizedPath }))
+        .digest('hex')
+    return `workspace:v1:${flavor}:${digest}`
 }
 
 export function buildMachineMetadata(): MachineMetadata {
@@ -103,7 +132,10 @@ async function reportSessionStarted(sessionId: string, metadata: Metadata): Prom
 export async function bootstrapSession(options: SessionBootstrapOptions): Promise<SessionBootstrapResult> {
     const workingDirectory = options.workingDirectory ?? process.cwd()
     const startedBy = options.startedBy ?? 'terminal'
-    const sessionTag = options.tag ?? randomUUID()
+    const sessionTag = options.tag
+        ?? (startedBy === 'terminal'
+            ? createWorkspaceSessionTag(options.flavor, workingDirectory)
+            : randomUUID())
     const agentState = options.agentState === undefined ? {} : options.agentState
 
     const api = await ApiClient.create()

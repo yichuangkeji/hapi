@@ -47,6 +47,54 @@ function toStoredSession(row: DbSessionRow): StoredSession {
     }
 }
 
+type SessionIdentity = {
+    path: string
+    flavor: string | null
+}
+
+function parseSessionIdentity(metadata: unknown): SessionIdentity | null {
+    if (!metadata || typeof metadata !== 'object') {
+        return null
+    }
+
+    const record = metadata as Record<string, unknown>
+    const path = typeof record.path === 'string' ? record.path.trim() : ''
+    if (!path) {
+        return null
+    }
+
+    const rawFlavor = typeof record.flavor === 'string' ? record.flavor.trim() : ''
+    return {
+        path,
+        flavor: rawFlavor || null
+    }
+}
+
+function findSessionByIdentity(
+    db: Database,
+    namespace: string,
+    identity: SessionIdentity
+): DbSessionRow | undefined {
+    return db.prepare(`
+        SELECT * FROM sessions
+        WHERE namespace = @namespace
+          AND json_extract(metadata, '$.path') = @path
+          AND (
+            (@flavor IS NULL AND (
+                json_extract(metadata, '$.flavor') IS NULL
+                OR json_extract(metadata, '$.flavor') = ''
+            ))
+            OR json_extract(metadata, '$.flavor') = @flavor
+          )
+        ORDER BY updated_at DESC
+        LIMIT 1
+    `).get({
+        namespace,
+        path: identity.path,
+        flavor: identity.flavor
+    }) as DbSessionRow | undefined
+}
+
 export function getOrCreateSession(
     db: Database,
     tag: string,
@@ -60,6 +108,36 @@ export function getOrCreateSession(
 
     if (existing) {
         return toStoredSession(existing)
+    }
+
+    // Workspace v1 tags are deterministic (namespace + workspace path on CLI side).
+    // If legacy sessions still use random tags, reuse that session and upgrade its tag.
+    if (tag.startsWith('workspace:v1:')) {
+        const identity = parseSessionIdentity(metadata)
+        if (identity) {
+            const legacy = findSessionByIdentity(db, namespace, identity)
+            if (legacy) {
+                if (legacy.tag !== tag) {
+                    db.prepare(`
+                        UPDATE sessions
+                        SET tag = @tag
+                        WHERE id = @id
+                          AND namespace = @namespace
+                    `).run({
+                        id: legacy.id,
+                        namespace,
+                        tag
+                    })
+                    const upgraded = db.prepare(
+                        'SELECT * FROM sessions WHERE id = ?'
+                    ).get(legacy.id) as DbSessionRow | undefined
+                    if (upgraded) {
+                        return toStoredSession(upgraded)
+                    }
+                }
+                return toStoredSession(legacy)
+            }
+        }
     }
 
     const now = Date.now()
