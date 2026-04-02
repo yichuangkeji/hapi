@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { buildThreadStartParams, buildTurnStartParams } from './appServerConfig';
-import { codexSystemPrompt } from './systemPrompt';
 
 describe('appServerConfig', () => {
     const mcpServers = { hapi: { command: 'node', args: ['mcp'] } };
@@ -14,14 +13,11 @@ describe('appServerConfig', () => {
 
         expect(params.sandbox).toBe('danger-full-access');
         expect(params.approvalPolicy).toBe('never');
-        expect(params.baseInstructions).toBe(codexSystemPrompt);
-        expect(params.developerInstructions).toBe(codexSystemPrompt);
         expect(params.config).toEqual({
             'mcp_servers.hapi': {
                 command: 'node',
                 args: ['mcp']
-            },
-            developer_instructions: codexSystemPrompt
+            }
         });
     });
 
@@ -43,14 +39,14 @@ describe('appServerConfig', () => {
             developerInstructions: 'Only respond in Chinese.'
         });
 
-        expect(params.baseInstructions).toBe(codexSystemPrompt);
-        expect(params.developerInstructions).toBe(`${codexSystemPrompt}\n\nOnly respond in Chinese.`);
+        expect(params.baseInstructions).toBeUndefined();
+        expect(params.developerInstructions).toBe('Only respond in Chinese.');
         expect(params.config).toEqual({
             'mcp_servers.hapi': {
                 command: 'node',
                 args: ['mcp']
             },
-            developer_instructions: `${codexSystemPrompt}\n\nOnly respond in Chinese.`
+            developer_instructions: 'Only respond in Chinese.'
         });
     });
 

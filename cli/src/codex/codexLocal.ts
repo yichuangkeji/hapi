@@ -54,7 +54,9 @@ export async function codexLocal(opts: {
     }
 
     // Add developer instructions (system prompt)
-    args.push(...buildDeveloperInstructionsArg(codexSystemPrompt));
+    if (codexSystemPrompt.trim().length > 0) {
+        args.push(...buildDeveloperInstructionsArg(codexSystemPrompt));
+    }
 
     if (opts.codexArgs) {
         const safeArgs = filterResumeSubcommand(opts.codexArgs);

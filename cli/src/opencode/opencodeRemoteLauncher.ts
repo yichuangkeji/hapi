@@ -114,12 +114,12 @@ class OpencodeRemoteLauncher extends RemoteLauncherBase {
             this.applyDisplayMode(batch.mode.permissionMode);
             messageBuffer.addMessage(batch.message, 'user');
 
-            // Inject title instructions on first prompt
+            // Inject startup instructions on first prompt
             let messageText = batch.message;
-            if (!this.instructionsSent) {
+            if (!this.instructionsSent && TITLE_INSTRUCTION.trim().length > 0) {
                 messageText = `${TITLE_INSTRUCTION}\n\n${batch.message}`;
-                this.instructionsSent = true;
             }
+            this.instructionsSent = true;
 
             const promptContent: PromptContent[] = [{
                 type: 'text',

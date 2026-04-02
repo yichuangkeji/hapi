@@ -44,11 +44,12 @@ export function buildCodexStartConfig(args: {
 
     const prompt = args.message;
     const baseInstructions = codexSystemPrompt;
+    const resolvedDeveloperInstructions = [baseInstructions, args.developerInstructions]
+        .filter((value): value is string => Boolean(value && value.trim().length > 0))
+        .join('\n\n');
     const config: Record<string, unknown> = {
         mcp_servers: args.mcpServers,
-        developer_instructions: args.developerInstructions
-            ? `${baseInstructions}\n\n${args.developerInstructions}`
-            : baseInstructions
+        ...(resolvedDeveloperInstructions ? { developer_instructions: resolvedDeveloperInstructions } : {})
     };
     const startConfig: CodexSessionConfig = {
         prompt,
