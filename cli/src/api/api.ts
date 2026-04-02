@@ -74,6 +74,65 @@ export class ApiClient {
         }
     }
 
+    async resetSessionConversation(opts: {
+        sessionId: string
+        metadata: Metadata
+        state: AgentState | null
+    }): Promise<Session> {
+        const response = await axios.post<CreateSessionResponse>(
+            `${configuration.apiUrl}/cli/sessions/${encodeURIComponent(opts.sessionId)}/reset`,
+            {
+                metadata: opts.metadata,
+                agentState: opts.state
+            },
+            {
+                headers: {
+                    Authorization: `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 60_000
+            }
+        )
+
+        const parsed = CreateSessionResponseSchema.safeParse(response.data)
+        if (!parsed.success) {
+            throw apiValidationError('Invalid /cli/sessions/:id/reset response', response)
+        }
+
+        const raw = parsed.data.session
+
+        const metadata = (() => {
+            if (raw.metadata == null) return null
+            const parsedMetadata = MetadataSchema.safeParse(raw.metadata)
+            return parsedMetadata.success ? parsedMetadata.data : null
+        })()
+
+        const agentState = (() => {
+            if (raw.agentState == null) return null
+            const parsedAgentState = AgentStateSchema.safeParse(raw.agentState)
+            return parsedAgentState.success ? parsedAgentState.data : null
+        })()
+
+        return {
+            id: raw.id,
+            namespace: raw.namespace,
+            seq: raw.seq,
+            createdAt: raw.createdAt,
+            updatedAt: raw.updatedAt,
+            active: raw.active,
+            activeAt: raw.activeAt,
+            metadata,
+            metadataVersion: raw.metadataVersion,
+            agentState,
+            agentStateVersion: raw.agentStateVersion,
+            thinking: raw.thinking,
+            thinkingAt: raw.thinkingAt,
+            todos: raw.todos,
+            permissionMode: raw.permissionMode,
+            modelMode: raw.modelMode
+        }
+    }
+
     async getOrCreateMachine(opts: {
         machineId: string
         metadata: MachineMetadata

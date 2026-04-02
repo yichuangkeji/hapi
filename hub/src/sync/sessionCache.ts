@@ -291,6 +291,40 @@ export class SessionCache {
         this.publisher.emit({ type: 'session-removed', sessionId, namespace: session.namespace })
     }
 
+    async resetSessionConversation(
+        sessionId: string,
+        options: {
+            metadata: unknown
+            agentState: unknown
+        }
+    ): Promise<Session> {
+        const existing = this.sessions.get(sessionId) ?? this.refreshSession(sessionId)
+        if (!existing) {
+            throw new Error('Session not found')
+        }
+
+        const updated = this.store.sessions.resetSessionConversation(
+            sessionId,
+            existing.namespace,
+            options.metadata,
+            options.agentState
+        )
+        if (!updated) {
+            throw new Error('Failed to reset session conversation')
+        }
+
+        this.lastBroadcastAtBySessionId.delete(sessionId)
+        this.todoBackfillAttemptedSessionIds.delete(sessionId)
+
+        const refreshed = this.refreshSession(sessionId)
+        if (!refreshed) {
+            throw new Error('Failed to reload session after reset')
+        }
+
+        this.publisher.emit({ type: 'session-cleared', sessionId, namespace: refreshed.namespace })
+        return refreshed
+    }
+
     async mergeSessions(oldSessionId: string, newSessionId: string, namespace: string): Promise<void> {
         if (oldSessionId === newSessionId) {
             return

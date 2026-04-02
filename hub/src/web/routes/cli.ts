@@ -14,6 +14,11 @@ const createOrLoadSessionSchema = z.object({
     agentState: z.unknown().nullable().optional()
 })
 
+const resetSessionSchema = z.object({
+    metadata: z.unknown().optional(),
+    agentState: z.unknown().nullable().optional()
+})
+
 const createOrLoadMachineSchema = z.object({
     id: z.string().min(1),
     metadata: z.unknown(),
@@ -116,6 +121,45 @@ export function createCliRoutes(getSyncEngine: () => SyncEngine | null): Hono<Cl
             return c.json({ error: resolved.error }, resolved.status)
         }
         return c.json({ session: resolved.session })
+    })
+
+    app.post('/sessions/:id/reset', async (c) => {
+        const engine = getSyncEngine()
+        if (!engine) {
+            return c.json({ error: 'Not ready' }, 503)
+        }
+
+        const sessionId = c.req.param('id')
+        const namespace = c.get('namespace')
+        const resolved = resolveSessionForNamespace(engine, sessionId, namespace)
+        if (!resolved.ok) {
+            return c.json({ error: resolved.error }, resolved.status)
+        }
+
+        const body = await c.req.json().catch(() => ({}))
+        const parsed = resetSessionSchema.safeParse(body)
+        if (!parsed.success) {
+            return c.json({ error: 'Invalid body' }, 400)
+        }
+
+        try {
+            await engine.resetSessionConversation(resolved.sessionId, {
+                metadata: parsed.data.metadata,
+                agentState: parsed.data.agentState,
+                notifyRuntime: false
+            })
+        } catch (error) {
+            return c.json({
+                error: error instanceof Error ? error.message : 'Failed to reset session'
+            }, 500)
+        }
+
+        const refreshed = engine.getSessionByNamespace(resolved.sessionId, namespace)
+        if (!refreshed) {
+            return c.json({ error: 'Session not found after reset' }, 500)
+        }
+
+        return c.json({ session: refreshed })
     })
 
     app.get('/sessions/:id/messages', (c) => {

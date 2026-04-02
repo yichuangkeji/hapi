@@ -37,6 +37,7 @@ const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
         { name: 'status', description: 'Show Claude Code status including version, model, account, and API connectivity', source: 'builtin' },
     ],
     codex: [
+        { name: 'clear', description: 'Reset the current Codex conversation and start fresh', source: 'builtin' },
         { name: 'review', description: 'Review current changes and find issues', source: 'builtin' },
         { name: 'new', description: 'Start a new chat during a conversation', source: 'builtin' },
         { name: 'compat', description: 'Summarize conversation to prevent hitting the context limit', source: 'builtin' },

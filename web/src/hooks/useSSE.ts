@@ -488,6 +488,11 @@ export function useSSE(options: {
                 ingestIncomingMessages(event.sessionId, [event.message])
             }
 
+            if (event.type === 'session-cleared') {
+                clearMessageWindow(event.sessionId)
+                queueSessionDetailInvalidation(event.sessionId)
+            }
+
             if (event.type === 'session-added' || event.type === 'session-updated' || event.type === 'session-removed') {
                 if (event.type === 'session-removed') {
                     removeSessionSummary(event.sessionId)

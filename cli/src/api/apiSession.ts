@@ -213,6 +213,12 @@ export class ApiSessionClient extends EventEmitter {
         }
     }
 
+    resetConversationState(): void {
+        this.pendingMessages = []
+        this.lastSeenMessageSeq = null
+        this.needsBackfill = false
+    }
+
     private enqueueUserMessage(message: UserMessage): void {
         if (this.pendingMessageCallback) {
             this.pendingMessageCallback(message)

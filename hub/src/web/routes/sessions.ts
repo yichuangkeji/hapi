@@ -107,6 +107,34 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         return c.json({ type: 'success', sessionId: result.sessionId })
     })
 
+    app.post('/sessions/:id/clear', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        const flavor = sessionResult.session.metadata?.flavor ?? 'claude'
+        if (flavor !== 'codex') {
+            return c.json({ error: 'Clear is only supported for Codex sessions' }, 400)
+        }
+
+        try {
+            await engine.resetSessionConversation(sessionResult.sessionId, {
+                notifyRuntime: sessionResult.session.active
+            })
+            return c.json({ ok: true })
+        } catch (error) {
+            return c.json({
+                error: error instanceof Error ? error.message : 'Failed to clear conversation'
+            }, 500)
+        }
+    })
+
     app.post('/sessions/:id/upload', async (c) => {
         const engine = requireSyncEngine(c, getSyncEngine)
         if (engine instanceof Response) {
