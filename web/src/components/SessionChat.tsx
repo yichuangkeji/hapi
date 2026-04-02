@@ -18,6 +18,7 @@ import { usePlatform } from '@/hooks/usePlatform'
 import { useSessionActions } from '@/hooks/mutations/useSessionActions'
 import { useVoiceOptional } from '@/lib/voice-context'
 import { RealtimeVoiceSession, registerSessionStore, registerVoiceHooksStore, voiceHooks } from '@/realtime'
+import { useTranslation } from '@/lib/use-translation'
 
 export function SessionChat(props: {
     api: ApiClient
@@ -39,6 +40,7 @@ export function SessionChat(props: {
     onRetryMessage?: (localId: string) => void
     autocompleteSuggestions?: (query: string) => Promise<Suggestion[]>
 }) {
+    const { t } = useTranslation()
     const { haptic } = usePlatform()
     const navigate = useNavigate()
     const sessionInactive = !props.session.active
@@ -282,7 +284,7 @@ export function SessionChat(props: {
             {sessionInactive ? (
                 <div className="px-3 pt-3">
                     <div className="mx-auto w-full max-w-content rounded-md bg-[var(--app-subtle-bg)] p-3 text-sm text-[var(--app-hint)]">
-                        Session is inactive. Sending will resume it automatically.
+                        {t('session.resume.inactive')}
                     </div>
                 </div>
             ) : null}

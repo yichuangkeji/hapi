@@ -235,6 +235,8 @@ export default {
   // Send blocked
   'send.blocked.title': 'Cannot send message',
   'send.blocked.noConnection': 'Not connected to server',
+  'session.resume.inactive': 'Session is inactive. Type /resume to reactivate it, or send a message to resume automatically.',
+  'session.resume.failed': 'Resume failed',
 
   // Install prompt
   'install.title': 'Install HAPI',
@@ -275,7 +277,7 @@ export default {
   'misc.loadOlder': 'Load older',
   'misc.newMessage': '{n} new message{s}',
   'misc.loadingMessages': 'Loading messages…',
-  'misc.typeMessage': "Type 'continue' to resume...",
+  'misc.typeMessage': "Type '/resume' to resume...",
   'misc.typeAMessage': 'Type a message...',
   'misc.offline': 'offline',
   'misc.permissionRequired': 'permission required',

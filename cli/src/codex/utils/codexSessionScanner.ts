@@ -70,6 +70,7 @@ class CodexSessionScannerImpl extends BaseSessionScanner<CodexSessionEvent> {
     private readonly sessionMetaParsed = new Set<string>();
     private readonly fileEpochByPath = new Map<string, number>();
     private readonly targetCwd: string | null;
+    private readonly shouldBackfillExistingEvents: boolean;
     private readonly referenceTimestampMs: number;
     private readonly sessionStartWindowMs: number;
     private readonly matchDeadlineMs: number;
@@ -90,6 +91,7 @@ class CodexSessionScannerImpl extends BaseSessionScanner<CodexSessionEvent> {
         this.activeSessionId = opts.sessionId;
         this.reportedSessionId = opts.sessionId;
         this.targetCwd = targetCwd;
+        this.shouldBackfillExistingEvents = Boolean(opts.sessionId);
         this.referenceTimestampMs = opts.startupTimestampMs ?? Date.now();
         this.sessionStartWindowMs = opts.sessionStartWindowMs ?? DEFAULT_SESSION_START_WINDOW_MS;
         this.matchDeadlineMs = this.referenceTimestampMs + this.sessionStartWindowMs;
@@ -131,7 +133,8 @@ class CodexSessionScannerImpl extends BaseSessionScanner<CodexSessionEvent> {
         const files = await this.listSessionFiles(this.sessionsRoot);
         for (const filePath of files) {
             const { nextCursor } = await this.readSessionFile(filePath, 0);
-            this.setCursor(filePath, nextCursor);
+            const shouldBackfill = this.shouldBackfillExistingEvents && this.shouldWatchFile(filePath);
+            this.setCursor(filePath, shouldBackfill ? 0 : nextCursor);
             if (this.shouldWatchFile(filePath)) {
                 this.ensureWatcher(filePath);
             }

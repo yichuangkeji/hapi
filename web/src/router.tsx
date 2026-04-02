@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
     Navigate,
@@ -185,6 +185,7 @@ function SessionPage() {
     const navigate = useNavigate()
     const queryClient = useQueryClient()
     const { addToast } = useToast()
+    const [isResuming, setIsResuming] = useState(false)
     const { sessionId } = useParams({ from: '/sessions/$sessionId' })
     const {
         session,
@@ -203,6 +204,33 @@ function SessionPage() {
         flushPending,
         setAtBottom,
     } = useMessages(api, sessionId)
+    const handleSessionResolved = useCallback((resolvedSessionId: string) => {
+        void (async () => {
+            if (api) {
+                if (session && resolvedSessionId !== session.id) {
+                    seedMessageWindowFromSession(session.id, resolvedSessionId)
+                    queryClient.setQueryData(queryKeys.session(resolvedSessionId), {
+                        session: { ...session, id: resolvedSessionId, active: true }
+                    })
+                }
+                try {
+                    await Promise.all([
+                        queryClient.prefetchQuery({
+                            queryKey: queryKeys.session(resolvedSessionId),
+                            queryFn: () => api.getSession(resolvedSessionId),
+                        }),
+                        fetchLatestMessages(api, resolvedSessionId),
+                    ])
+                } catch {
+                }
+            }
+            navigate({
+                to: '/sessions/$sessionId',
+                params: { sessionId: resolvedSessionId },
+                replace: true
+            })
+        })()
+    }, [api, navigate, queryClient, session])
     const {
         sendMessage,
         retryMessage,
@@ -215,9 +243,9 @@ function SessionPage() {
             try {
                 return await api.resumeSession(currentSessionId)
             } catch (error) {
-                const message = error instanceof Error ? error.message : 'Resume failed'
+                const message = error instanceof Error ? error.message : t('session.resume.failed')
                 addToast({
-                    title: 'Resume failed',
+                    title: t('session.resume.failed'),
                     body: message,
                     sessionId: currentSessionId,
                     url: ''
@@ -225,33 +253,7 @@ function SessionPage() {
                 throw error
             }
         },
-        onSessionResolved: (resolvedSessionId) => {
-            void (async () => {
-                if (api) {
-                    if (session && resolvedSessionId !== session.id) {
-                        seedMessageWindowFromSession(session.id, resolvedSessionId)
-                        queryClient.setQueryData(queryKeys.session(resolvedSessionId), {
-                            session: { ...session, id: resolvedSessionId, active: true }
-                        })
-                    }
-                    try {
-                        await Promise.all([
-                            queryClient.prefetchQuery({
-                                queryKey: queryKeys.session(resolvedSessionId),
-                                queryFn: () => api.getSession(resolvedSessionId),
-                            }),
-                            fetchLatestMessages(api, resolvedSessionId),
-                        ])
-                    } catch {
-                    }
-                }
-                navigate({
-                    to: '/sessions/$sessionId',
-                    params: { sessionId: resolvedSessionId },
-                    replace: true
-                })
-            })()
-        },
+        onSessionResolved: handleSessionResolved,
         onBlocked: (reason) => {
             if (reason === 'no-api') {
                 addToast({
@@ -265,11 +267,38 @@ function SessionPage() {
         }
     })
 
+    const handleResume = useCallback(async () => {
+        if (!api || !session || !sessionId || session.active || isResuming) {
+            return
+        }
+
+        setIsResuming(true)
+        try {
+            const resolvedSessionId = await api.resumeSession(sessionId)
+            handleSessionResolved(resolvedSessionId)
+        } catch (error) {
+            const message = error instanceof Error ? error.message : t('session.resume.failed')
+            addToast({
+                title: t('session.resume.failed'),
+                body: message,
+                sessionId,
+                url: ''
+            })
+        } finally {
+            setIsResuming(false)
+        }
+    }, [addToast, api, handleSessionResolved, isResuming, session, sessionId, t])
+
     // Get agent type from session metadata for slash commands
     const agentType = session?.metadata?.flavor ?? 'claude'
 
     const handleSend = useCallback((text: string, attachments?: AttachmentMetadata[]) => {
         const trimmed = text.trim()
+        if (!session?.active && trimmed === '/resume' && (!attachments || attachments.length === 0)) {
+            void handleResume()
+            return
+        }
+
         if (agentType === 'codex' && trimmed === '/clear' && (!attachments || attachments.length === 0)) {
             void (async () => {
                 if (!api || !sessionId) {
@@ -293,7 +322,7 @@ function SessionPage() {
         }
 
         sendMessage(text, attachments)
-    }, [addToast, agentType, api, queryClient, sendMessage, sessionId])
+    }, [addToast, agentType, api, handleResume, queryClient, sendMessage, session, sessionId])
     const {
         getSuggestions: getSlashSuggestions,
     } = useSlashCommands(api, sessionId, agentType)

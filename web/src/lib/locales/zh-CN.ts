@@ -237,6 +237,8 @@ export default {
   // Send blocked
   'send.blocked.title': '无法发送消息',
   'send.blocked.noConnection': '未连接到服务器',
+  'session.resume.inactive': '当前会话未激活。输入 /resume 可重新激活，也可以直接发送消息自动恢复。',
+  'session.resume.failed': '恢复失败',
 
   // Install prompt
   'install.title': '安装 HAPI',
@@ -277,7 +279,7 @@ export default {
   'misc.loadOlder': '加载更早的',
   'misc.newMessage': '{n} 条新消息',
   'misc.loadingMessages': '加载消息中…',
-  'misc.typeMessage': "输入 'continue' 继续...",
+  'misc.typeMessage': "输入 '/resume' 继续...",
   'misc.typeAMessage': '输入消息...',
   'misc.offline': '离线',
   'misc.permissionRequired': '需要权限',

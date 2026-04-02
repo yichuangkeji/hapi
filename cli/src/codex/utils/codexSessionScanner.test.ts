@@ -44,7 +44,7 @@ describe('codexSessionScanner', () => {
         }
     });
 
-    it('emits only new events after startup', async () => {
+    it('replays existing events on explicit resume startup', async () => {
         const sessionId = 'session-123';
         sessionFile = join(sessionsDir, `codex-${sessionId}.jsonl`);
 
@@ -61,7 +61,9 @@ describe('codexSessionScanner', () => {
         });
 
         await wait(150);
-        expect(events).toHaveLength(0);
+        expect(events).toHaveLength(2);
+        expect(events[0]?.type).toBe('session_meta');
+        expect(events[1]?.type).toBe('event_msg');
 
         const newLine = JSON.stringify({
             type: 'response_item',
@@ -70,8 +72,8 @@ describe('codexSessionScanner', () => {
         await appendFile(sessionFile, newLine + '\n');
 
         await wait(200);
-        expect(events).toHaveLength(1);
-        expect(events[0].type).toBe('response_item');
+        expect(events).toHaveLength(3);
+        expect(events[2]?.type).toBe('response_item');
     });
 
     it('limits session scan to dates within the start window', async () => {
