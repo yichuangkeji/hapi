@@ -281,6 +281,13 @@ export class ApiClient {
         })
     }
 
+    async compactSessionConversation(sessionId: string): Promise<void> {
+        await this.request(`/api/sessions/${encodeURIComponent(sessionId)}/compact`, {
+            method: 'POST',
+            body: JSON.stringify({})
+        })
+    }
+
     async sendMessage(sessionId: string, text: string, localId?: string | null, attachments?: AttachmentMetadata[]): Promise<void> {
         await this.request(`/api/sessions/${encodeURIComponent(sessionId)}/messages`, {
             method: 'POST',

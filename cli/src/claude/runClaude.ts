@@ -151,6 +151,18 @@ export async function runClaude(options: StartOptions = {}): Promise<void> {
     let currentAllowedTools: string[] | undefined = undefined; // Track current allowed tools
     let currentDisallowedTools: string[] | undefined = undefined; // Track current disallowed tools
 
+    const enqueueNativeSlashCommand = (command: '/clear' | '/compact') => {
+        messageQueue.pushIsolateAndClear(command, {
+            permissionMode: currentPermissionMode ?? 'default',
+            model: currentModelMode === 'default' ? undefined : currentModelMode,
+            fallbackModel: currentFallbackModel,
+            customSystemPrompt: currentCustomSystemPrompt,
+            appendSystemPrompt: currentAppendSystemPrompt,
+            allowedTools: currentAllowedTools,
+            disallowedTools: currentDisallowedTools
+        });
+    };
+
     const syncSessionModes = () => {
         const sessionInstance = currentSessionRef.current;
         if (!sessionInstance) {
@@ -308,6 +320,17 @@ export async function runClaude(options: StartOptions = {}): Promise<void> {
 
         syncSessionModes();
         return { applied: { permissionMode: currentPermissionMode, modelMode: currentModelMode } };
+    });
+
+    session.rpcHandlerManager.registerHandler('reset-conversation', async () => {
+        enqueueNativeSlashCommand('/clear');
+        session.resetConversationState();
+        return { ok: true };
+    });
+
+    session.rpcHandlerManager.registerHandler('compact-conversation', async () => {
+        enqueueNativeSlashCommand('/compact');
+        return { ok: true };
     });
 
     let loopError: unknown = null;

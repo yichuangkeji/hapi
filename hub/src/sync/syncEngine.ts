@@ -357,6 +357,18 @@ export class SyncEngine {
         })
     }
 
+    async compactSessionConversation(sessionId: string): Promise<void> {
+        const session = this.getSession(sessionId)
+        if (!session) {
+            throw new Error('Session not found')
+        }
+        if (!session.active) {
+            throw new Error('Session is not active')
+        }
+
+        await this.rpcGateway.compactConversation(sessionId)
+    }
+
     async applySessionConfig(
         sessionId: string,
         config: {

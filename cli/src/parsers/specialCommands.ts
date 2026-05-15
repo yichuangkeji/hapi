@@ -18,22 +18,28 @@ export interface SpecialCommandResult {
 
 /**
  * Parse /compact command
- * Matches messages starting with "/compact " or exactly "/compact"
+ * Matches messages starting with "/compact " or exactly "/compact".
+ * "/compat" is accepted as a web/backward-compatible alias and normalized to "/compact".
  */
 export function parseCompact(message: string): CompactCommandResult {
     const trimmed = message.trim();
+    const normalizeAlias = (value: string): string => value === '/compat'
+        ? '/compact'
+        : value.startsWith('/compat ')
+            ? `/compact ${value.slice('/compat '.length)}`
+            : value;
     
-    if (trimmed === '/compact') {
+    if (trimmed === '/compact' || trimmed === '/compat') {
         return {
             isCompact: true,
-            originalMessage: trimmed
+            originalMessage: normalizeAlias(trimmed)
         };
     }
     
-    if (trimmed.startsWith('/compact ')) {
+    if (trimmed.startsWith('/compact ') || trimmed.startsWith('/compat ')) {
         return {
             isCompact: true,
-            originalMessage: trimmed
+            originalMessage: normalizeAlias(trimmed)
         };
     }
     

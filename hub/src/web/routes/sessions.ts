@@ -119,8 +119,8 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         }
 
         const flavor = sessionResult.session.metadata?.flavor ?? 'claude'
-        if (flavor !== 'codex') {
-            return c.json({ error: 'Clear is only supported for Codex sessions' }, 400)
+        if (flavor !== 'codex' && flavor !== 'claude') {
+            return c.json({ error: 'Clear is only supported for Claude and Codex sessions' }, 400)
         }
 
         try {
@@ -131,6 +131,35 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         } catch (error) {
             return c.json({
                 error: error instanceof Error ? error.message : 'Failed to clear conversation'
+            }, 500)
+        }
+    })
+
+    app.post('/sessions/:id/compact', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        const flavor = sessionResult.session.metadata?.flavor ?? 'claude'
+        if (flavor !== 'codex' && flavor !== 'claude') {
+            return c.json({ error: 'Compact is only supported for Claude and Codex sessions' }, 400)
+        }
+        if (!sessionResult.session.active) {
+            return c.json({ error: 'Compact requires an active session' }, 409)
+        }
+
+        try {
+            await engine.compactSessionConversation(sessionResult.sessionId)
+            return c.json({ ok: true })
+        } catch (error) {
+            return c.json({
+                error: error instanceof Error ? error.message : 'Failed to compact conversation'
             }, 500)
         }
     })

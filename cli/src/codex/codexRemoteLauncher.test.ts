@@ -4,7 +4,8 @@ import type { EnhancedMode } from './loop';
 
 const harness = vi.hoisted(() => ({
     notifications: [] as Array<{ method: string; params: unknown }>,
-    registerRequestCalls: [] as string[]
+    registerRequestCalls: [] as string[],
+    compactThreadCalls: [] as unknown[]
 }));
 
 vi.mock('./codexAppServerClient', () => {
@@ -49,6 +50,11 @@ vi.mock('./codexAppServerClient', () => {
             return {};
         }
 
+        async compactThread(params: unknown): Promise<Record<string, never>> {
+            harness.compactThreadCalls.push(params);
+            return {};
+        }
+
         async disconnect(): Promise<void> {}
     }
 
@@ -77,10 +83,12 @@ function createMode(): EnhancedMode {
     };
 }
 
-function createSessionStub() {
+function createSessionStub(options?: { closeQueue?: boolean }) {
     const queue = new MessageQueue2<EnhancedMode>((mode) => JSON.stringify(mode));
     queue.push('hello from launcher test', createMode());
-    queue.close();
+    if (options?.closeQueue !== false) {
+        queue.close();
+    }
 
     const sessionEvents: Array<{ type: string; [key: string]: unknown }> = [];
     const codexMessages: unknown[] = [];
@@ -92,6 +100,8 @@ function createSessionStub() {
     };
 
     const rpcHandlers = new Map<string, (params: unknown) => unknown>();
+    const resetConversationCallbacks: Array<() => Promise<void> | void> = [];
+    const compactConversationCallbacks: Array<() => Promise<void> | void> = [];
     const client = {
         rpcHandlerManager: {
             registerHandler(method: string, handler: (params: unknown) => unknown) {
@@ -135,6 +145,20 @@ function createSessionStub() {
         },
         sendUserMessage(text: string) {
             client.sendUserMessage(text);
+        },
+        addResetConversationCallback(callback: () => Promise<void> | void) {
+            resetConversationCallbacks.push(callback);
+        },
+        removeResetConversationCallback(callback: () => Promise<void> | void) {
+            const index = resetConversationCallbacks.indexOf(callback);
+            if (index >= 0) resetConversationCallbacks.splice(index, 1);
+        },
+        addCompactConversationCallback(callback: () => Promise<void> | void) {
+            compactConversationCallbacks.push(callback);
+        },
+        removeCompactConversationCallback(callback: () => Promise<void> | void) {
+            const index = compactConversationCallbacks.indexOf(callback);
+            if (index >= 0) compactConversationCallbacks.splice(index, 1);
         }
     };
 
@@ -145,6 +169,8 @@ function createSessionStub() {
         thinkingChanges,
         foundSessionIds,
         rpcHandlers,
+        resetConversationCallbacks,
+        compactConversationCallbacks,
         getAgentState: () => agentState
     };
 }
@@ -153,6 +179,7 @@ describe('codexRemoteLauncher', () => {
     afterEach(() => {
         harness.notifications = [];
         harness.registerRequestCalls = [];
+        harness.compactThreadCalls = [];
         delete process.env.CODEX_USE_MCP_SERVER;
     });
 
@@ -173,5 +200,26 @@ describe('codexRemoteLauncher', () => {
         expect(sessionEvents.filter((event) => event.type === 'ready').length).toBeGreaterThanOrEqual(1);
         expect(thinkingChanges).toContain(true);
         expect(session.thinking).toBe(false);
+    });
+
+    it('runs compact callback against the active app-server thread', async () => {
+        delete process.env.CODEX_USE_MCP_SERVER;
+        const {
+            session,
+            compactConversationCallbacks
+        } = createSessionStub({ closeQueue: false });
+
+        const launchPromise = codexRemoteLauncher(session as never);
+
+        await vi.waitFor(() => {
+            expect(compactConversationCallbacks).toHaveLength(1);
+            expect(session.sessionId).toBe('thread-anonymous');
+        });
+
+        await compactConversationCallbacks[0]!();
+        expect(harness.compactThreadCalls).toEqual([{ threadId: 'thread-anonymous' }]);
+
+        session.queue.close();
+        await expect(launchPromise).resolves.toBe('exit');
     });
 });

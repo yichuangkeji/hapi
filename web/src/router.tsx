@@ -299,7 +299,8 @@ function SessionPage() {
             return
         }
 
-        if (agentType === 'codex' && trimmed === '/clear' && (!attachments || attachments.length === 0)) {
+        const supportsNativeConversationCommand = agentType === 'codex' || agentType === 'claude'
+        if (supportsNativeConversationCommand && trimmed === '/clear' && (!attachments || attachments.length === 0)) {
             void (async () => {
                 if (!api || !sessionId) {
                     return
@@ -312,6 +313,27 @@ function SessionPage() {
                     const message = error instanceof Error ? error.message : 'Clear failed'
                     addToast({
                         title: 'Clear failed',
+                        body: message,
+                        sessionId,
+                        url: ''
+                    })
+                }
+            })()
+            return
+        }
+
+        if (supportsNativeConversationCommand && (trimmed === '/compact' || trimmed === '/compat') && (!attachments || attachments.length === 0)) {
+            void (async () => {
+                if (!api || !sessionId) {
+                    return
+                }
+                try {
+                    await api.compactSessionConversation(sessionId)
+                    void queryClient.invalidateQueries({ queryKey: queryKeys.session(sessionId) })
+                } catch (error) {
+                    const message = error instanceof Error ? error.message : 'Compact failed'
+                    addToast({
+                        title: 'Compact failed',
                         body: message,
                         sessionId,
                         url: ''

@@ -17,6 +17,7 @@ export class CodexSession extends AgentSessionBase<EnhancedMode> {
     readonly startingMode: 'local' | 'remote';
     localLaunchFailure: LocalLaunchFailure | null = null;
     private resetConversationCallbacks: Array<() => Promise<void> | void> = [];
+    private compactConversationCallbacks: Array<() => Promise<void> | void> = [];
 
     constructor(opts: {
         api: ApiClient;
@@ -99,5 +100,22 @@ export class CodexSession extends AgentSessionBase<EnhancedMode> {
         }
         this.clearSessionId();
         this.client.resetConversationState();
+    };
+
+    addCompactConversationCallback = (callback: () => Promise<void> | void): void => {
+        this.compactConversationCallbacks.push(callback);
+    };
+
+    removeCompactConversationCallback = (callback: () => Promise<void> | void): void => {
+        const index = this.compactConversationCallbacks.indexOf(callback);
+        if (index !== -1) {
+            this.compactConversationCallbacks.splice(index, 1);
+        }
+    };
+
+    compactConversation = async (): Promise<void> => {
+        for (const callback of [...this.compactConversationCallbacks]) {
+            await callback();
+        }
     };
 }

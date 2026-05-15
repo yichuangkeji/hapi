@@ -45,6 +45,7 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
     private currentThreadId: string | null = null;
     private currentTurnId: string | null = null;
     private resetConversationCallback: (() => Promise<void>) | null = null;
+    private compactConversationCallback: (() => Promise<void>) | null = null;
     private suppressNextAbortMessage = false;
 
     constructor(session: CodexSession) {
@@ -633,6 +634,27 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
         };
         session.addResetConversationCallback(this.resetConversationCallback);
 
+        this.compactConversationCallback = async () => {
+            if (!useAppServer || !appServerClient) {
+                throw new Error('Codex compact requires app-server mode');
+            }
+            const threadId = this.currentThreadId ?? session.sessionId;
+            if (!threadId) {
+                throw new Error('Codex thread is not ready');
+            }
+            if (this.currentTurnId || session.thinking) {
+                throw new Error('Cannot compact while Codex is running');
+            }
+
+            logger.debug(`[Codex] Compact conversation requested for thread ${threadId}`);
+            messageBuffer.addMessage('Compaction started', 'status');
+            session.sendSessionEvent({ type: 'message', message: 'Compaction started' });
+            await appServerClient.compactThread({ threadId }, {
+                signal: this.abortController.signal
+            });
+        };
+        session.addCompactConversationCallback(this.compactConversationCallback);
+
         while (!this.shouldExit) {
             logActiveHandles('loop-top');
             let message: { message: string; mode: EnhancedMode; isolate: boolean; hash: string } | null = pending;
@@ -854,6 +876,10 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
         if (this.resetConversationCallback) {
             this.session.removeResetConversationCallback(this.resetConversationCallback);
             this.resetConversationCallback = null;
+        }
+        if (this.compactConversationCallback) {
+            this.session.removeCompactConversationCallback(this.compactConversationCallback);
+            this.compactConversationCallback = null;
         }
 
         if (this.happyServer) {

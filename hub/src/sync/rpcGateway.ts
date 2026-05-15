@@ -107,6 +107,10 @@ export class RpcGateway {
         await this.sessionRpc(sessionId, 'reset-conversation', {})
     }
 
+    async compactConversation(sessionId: string): Promise<void> {
+        await this.sessionRpc(sessionId, 'compact-conversation', {})
+    }
+
     async spawnSession(
         machineId: string,
         directory: string,

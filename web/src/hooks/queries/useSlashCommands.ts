@@ -29,6 +29,7 @@ const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
     claude: [
         { name: 'clear', description: 'Clear conversation history and free up context', source: 'builtin' },
         { name: 'compact', description: 'Clear conversation history but keep a summary in context', source: 'builtin' },
+        { name: 'compat', description: 'Alias for /compact', source: 'builtin' },
         { name: 'context', description: 'Visualize current context usage as a colored grid', source: 'builtin' },
         { name: 'cost', description: 'Show the total cost and duration of the current session', source: 'builtin' },
         { name: 'doctor', description: 'Diagnose and verify your Claude Code installation and settings', source: 'builtin' },
@@ -38,9 +39,10 @@ const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
     ],
     codex: [
         { name: 'clear', description: 'Reset the current Codex conversation and start fresh', source: 'builtin' },
+        { name: 'compact', description: 'Summarize conversation to prevent hitting the context limit', source: 'builtin' },
         { name: 'review', description: 'Review current changes and find issues', source: 'builtin' },
         { name: 'new', description: 'Start a new chat during a conversation', source: 'builtin' },
-        { name: 'compat', description: 'Summarize conversation to prevent hitting the context limit', source: 'builtin' },
+        { name: 'compat', description: 'Alias for /compact', source: 'builtin' },
         { name: 'undo', description: 'Ask Codex to undo a turn', source: 'builtin' },
         { name: 'diff', description: 'Show git diff including untracked files', source: 'builtin' },
         { name: 'status', description: 'Show current session configuration and token usage', source: 'builtin' },

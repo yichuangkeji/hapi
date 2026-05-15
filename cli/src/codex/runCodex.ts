@@ -142,6 +142,14 @@ export async function runCodex(opts: {
         return { ok: true };
     });
 
+    session.rpcHandlerManager.registerHandler('compact-conversation', async () => {
+        if (!sessionWrapperRef.current) {
+            throw new Error('Codex session is not ready');
+        }
+        await sessionWrapperRef.current.compactConversation();
+        return { ok: true };
+    });
+
     try {
         await loop({
             path: workingDirectory,

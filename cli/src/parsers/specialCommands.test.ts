@@ -14,6 +14,12 @@ describe('parseCompact', () => {
         expect(result.originalMessage).toBe('/compact');
     });
 
+    it('should parse /compat alias as /compact', () => {
+        const result = parseCompact('/compat optimize the code');
+        expect(result.isCompact).toBe(true);
+        expect(result.originalMessage).toBe('/compact optimize the code');
+    });
+
     it('should not parse regular messages', () => {
         const result = parseCompact('hello world');
         expect(result.isCompact).toBe(false);

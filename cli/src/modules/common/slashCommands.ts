@@ -28,11 +28,16 @@ const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
     claude: [
         { name: 'clear', description: 'Clear conversation history', source: 'builtin' },
         { name: 'compact', description: 'Compact conversation context', source: 'builtin' },
+        { name: 'compat', description: 'Alias for /compact', source: 'builtin' },
         { name: 'context', description: 'Show context information', source: 'builtin' },
         { name: 'cost', description: 'Show session cost', source: 'builtin' },
         { name: 'plan', description: 'Toggle plan mode', source: 'builtin' },
     ],
-    codex: [],
+    codex: [
+        { name: 'clear', description: 'Reset the current Codex conversation', source: 'builtin' },
+        { name: 'compact', description: 'Compact conversation context', source: 'builtin' },
+        { name: 'compat', description: 'Alias for /compact', source: 'builtin' },
+    ],
     gemini: [
         { name: 'about', description: 'About Gemini', source: 'builtin' },
         { name: 'clear', description: 'Clear conversation', source: 'builtin' },
