@@ -62,9 +62,11 @@ export default {
 
   // Session actions
   'session.action.rename': 'Rename',
+  'session.action.activate': 'Activate',
   'session.action.archive': 'Archive',
   'session.action.delete': 'Delete',
   'session.action.copy': 'Copy',
+  'session.activate.failed': 'Activation failed',
 
   // Dialogs
   'dialog.rename.title': 'Rename Session',

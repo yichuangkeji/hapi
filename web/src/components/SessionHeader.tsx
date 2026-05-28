@@ -6,6 +6,7 @@ import { useSessionActions } from '@/hooks/mutations/useSessionActions'
 import { SessionActionMenu } from '@/components/SessionActionMenu'
 import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/lib/toast-context'
 import { useTranslation } from '@/lib/use-translation'
 
 function getSessionTitle(session: Session): string {
@@ -64,10 +65,12 @@ export function SessionHeader(props: {
     onBack: () => void
     onViewFiles?: () => void
     api: ApiClient | null
+    onSessionActivated?: (sessionId: string) => void
     onSessionDeleted?: () => void
 }) {
     const { t } = useTranslation()
-    const { session, api, onSessionDeleted } = props
+    const { session, api, onSessionActivated, onSessionDeleted } = props
+    const { addToast } = useToast()
     const title = useMemo(() => getSessionTitle(session), [session])
     const worktreeBranch = session.metadata?.worktree?.branch
 
@@ -79,11 +82,25 @@ export function SessionHeader(props: {
     const [archiveOpen, setArchiveOpen] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const { archiveSession, renameSession, deleteSession, isPending } = useSessionActions(
+    const { activateSession, archiveSession, renameSession, deleteSession, isPending } = useSessionActions(
         api,
         session.id,
         session.metadata?.flavor ?? null
     )
+
+    const handleActivate = async () => {
+        try {
+            const activatedSessionId = await activateSession()
+            onSessionActivated?.(activatedSessionId)
+        } catch (error) {
+            addToast({
+                title: t('session.activate.failed'),
+                body: error instanceof Error ? error.message : t('dialog.error.default'),
+                sessionId: session.id,
+                url: ''
+            })
+        }
+    }
 
     const handleDelete = async () => {
         await deleteSession()
@@ -178,6 +195,7 @@ export function SessionHeader(props: {
                 isOpen={menuOpen}
                 onClose={() => setMenuOpen(false)}
                 sessionActive={session.active}
+                onActivate={() => void handleActivate()}
                 onRename={() => setRenameOpen(true)}
                 onArchive={() => setArchiveOpen(true)}
                 onDelete={() => setDeleteOpen(true)}

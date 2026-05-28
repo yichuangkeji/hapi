@@ -43,6 +43,7 @@ export const MetadataSchema = z.object({
     startedBy: z.enum(['runner', 'terminal']).optional(),
     lifecycleState: z.string().optional(),
     lifecycleStateSince: z.number().optional(),
+    supersededBySessionId: z.string().optional(),
     archivedBy: z.string().optional(),
     archiveReason: z.string().optional(),
     flavor: z.string().nullish(),

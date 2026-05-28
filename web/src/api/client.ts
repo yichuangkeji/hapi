@@ -1,4 +1,5 @@
 import type {
+    ActivateSessionResponse,
     AttachmentMetadata,
     AuthResponse,
     DeleteUploadResponse,
@@ -269,6 +270,14 @@ export class ApiClient {
     async resumeSession(sessionId: string): Promise<string> {
         const response = await this.request<{ sessionId: string }>(
             `/api/sessions/${encodeURIComponent(sessionId)}/resume`,
+            { method: 'POST' }
+        )
+        return response.sessionId
+    }
+
+    async activateSession(sessionId: string): Promise<string> {
+        const response = await this.request<ActivateSessionResponse>(
+            `/api/sessions/${encodeURIComponent(sessionId)}/activate`,
             { method: 'POST' }
         )
         return response.sessionId

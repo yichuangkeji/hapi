@@ -40,7 +40,7 @@ function estimateBase64Bytes(base64: string): number {
 export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Hono<WebAppEnv> {
     const app = new Hono<WebAppEnv>()
 
-    app.get('/sessions', (c) => {
+    app.get('/sessions', async (c) => {
         const engine = requireSyncEngine(c, getSyncEngine)
         if (engine instanceof Response) {
             return engine
@@ -49,7 +49,9 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
         const getPendingCount = (s: Session) => s.agentState?.requests ? Object.keys(s.agentState.requests).length : 0
 
         const namespace = c.get('namespace')
+        await engine.pruneDuplicateSessionsByPath(namespace)
         const sessions = engine.getSessionsByNamespace(namespace)
+            .filter((s) => !s.metadata?.supersededBySessionId)
             .sort((a, b) => {
                 // Active sessions first
                 if (a.active !== b.active) {
@@ -101,6 +103,31 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
                 : result.code === 'access_denied' ? 403
                     : result.code === 'session_not_found' ? 404
                         : 500
+            return c.json({ error: result.message, code: result.code }, status)
+        }
+
+        return c.json({ type: 'success', sessionId: result.sessionId })
+    })
+
+    app.post('/sessions/:id/activate', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        const namespace = c.get('namespace')
+        const result = await engine.activateSession(sessionResult.sessionId, namespace)
+        if (result.type === 'error') {
+            const status = result.code === 'no_machine_online' ? 503
+                : result.code === 'access_denied' ? 403
+                    : result.code === 'session_not_found' ? 404
+                        : result.code === 'session_active' ? 409
+                            : 500
             return c.json({ error: result.message, code: result.code }, status)
         }
 

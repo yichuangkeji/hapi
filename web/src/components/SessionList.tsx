@@ -7,7 +7,9 @@ import { useSessionActions } from '@/hooks/mutations/useSessionActions'
 import { SessionActionMenu } from '@/components/SessionActionMenu'
 import { RenameSessionDialog } from '@/components/RenameSessionDialog'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { useToast } from '@/lib/toast-context'
 import { useTranslation } from '@/lib/use-translation'
+import { basename } from '@/utils/path'
 
 type SessionGroup = {
     directory: string
@@ -17,8 +19,55 @@ type SessionGroup = {
     hasActiveSession: boolean
 }
 
+const OTHER_DIRECTORY = 'Other'
+
+function normalizeSessionPath(path?: string | null): string | null {
+    const rawPath = path?.trim()
+    if (!rawPath) return null
+    return rawPath.replace(/[\\/]+$/, '') || rawPath
+}
+
+function getParentPath(path: string): string | null {
+    const slashIndex = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+    if (slashIndex < 0) return null
+    if (slashIndex === 0) return path.slice(0, 1)
+    return path.slice(0, slashIndex)
+}
+
+export function getSessionDirectory(session: SessionSummary): string {
+    const projectPath = normalizeSessionPath(session.metadata?.worktree?.basePath ?? session.metadata?.path)
+    if (!projectPath) return OTHER_DIRECTORY
+    return getParentPath(projectPath) ?? OTHER_DIRECTORY
+}
+
+function getSessionPathKey(session: SessionSummary): string {
+    return normalizeSessionPath(session.metadata?.path) ?? OTHER_DIRECTORY
+}
+
+function getSessionGroupKey(session: SessionSummary): string {
+    return getSessionPathKey(session)
+}
+
+export function filterVisibleSessions(
+    sessions: SessionSummary[],
+    selectedSessionId?: string | null
+): SessionSummary[] {
+    const activeGroupKeys = new Set(
+        sessions
+            .filter((session) => session.active)
+            .map(getSessionGroupKey)
+    )
+
+    return sessions.filter((session) => {
+        if (session.id === selectedSessionId || session.active) {
+            return true
+        }
+        return !activeGroupKeys.has(getSessionGroupKey(session))
+    })
+}
+
 function getGroupDisplayName(directory: string): string {
-    if (directory === 'Other') return directory
+    if (directory === OTHER_DIRECTORY) return directory
     const parts = directory.split(/[\\/]+/).filter(Boolean)
     if (parts.length === 0) return directory
     if (parts.length === 1) return parts[0]
@@ -29,7 +78,7 @@ function groupSessionsByDirectory(sessions: SessionSummary[]): SessionGroup[] {
     const groups = new Map<string, SessionSummary[]>()
 
     sessions.forEach(session => {
-        const path = session.metadata?.worktree?.basePath ?? session.metadata?.path ?? 'Other'
+        const path = getSessionDirectory(session)
         if (!groups.has(path)) {
             groups.set(path, [])
         }
@@ -129,8 +178,8 @@ function getSessionTitle(session: SessionSummary): string {
         return session.metadata.summary.text
     }
     if (session.metadata?.path) {
-        const parts = session.metadata.path.split('/').filter(Boolean)
-        return parts.length > 0 ? parts[parts.length - 1] : session.id.slice(0, 8)
+        const title = basename(session.metadata.path)
+        return title || session.id.slice(0, 8)
     }
     return session.id.slice(0, 8)
 }
@@ -169,6 +218,7 @@ function SessionItem(props: {
     selected?: boolean
 }) {
     const { t } = useTranslation()
+    const { addToast } = useToast()
     const { session: s, onSelect, showPath = true, api, selected = false } = props
     const { haptic } = usePlatform()
     const [menuOpen, setMenuOpen] = useState(false)
@@ -177,11 +227,27 @@ function SessionItem(props: {
     const [archiveOpen, setArchiveOpen] = useState(false)
     const [deleteOpen, setDeleteOpen] = useState(false)
 
-    const { archiveSession, renameSession, deleteSession, isPending } = useSessionActions(
+    const { activateSession, archiveSession, renameSession, deleteSession, isPending } = useSessionActions(
         api,
         s.id,
         s.metadata?.flavor ?? null
     )
+
+    const handleActivate = async () => {
+        try {
+            const activatedSessionId = await activateSession()
+            haptic.notification('success')
+            onSelect(activatedSessionId)
+        } catch (error) {
+            haptic.notification('error')
+            addToast({
+                title: t('session.activate.failed'),
+                body: error instanceof Error ? error.message : t('dialog.error.default'),
+                sessionId: s.id,
+                url: ''
+            })
+        }
+    }
 
     const longPressHandlers = useLongPress({
         onLongPress: (point) => {
@@ -270,6 +336,7 @@ function SessionItem(props: {
                 isOpen={menuOpen}
                 onClose={() => setMenuOpen(false)}
                 sessionActive={s.active}
+                onActivate={() => void handleActivate()}
                 onRename={() => setRenameOpen(true)}
                 onArchive={() => setArchiveOpen(true)}
                 onDelete={() => setDeleteOpen(true)}
@@ -323,9 +390,13 @@ export function SessionList(props: {
 }) {
     const { t } = useTranslation()
     const { renderHeader = true, api, selectedSessionId } = props
+    const visibleSessions = useMemo(
+        () => filterVisibleSessions(props.sessions, selectedSessionId),
+        [props.sessions, selectedSessionId]
+    )
     const groups = useMemo(
-        () => groupSessionsByDirectory(props.sessions),
-        [props.sessions]
+        () => groupSessionsByDirectory(visibleSessions),
+        [visibleSessions]
     )
     const [collapseOverrides, setCollapseOverrides] = useState<Map<string, boolean>>(
         () => new Map()
@@ -365,7 +436,7 @@ export function SessionList(props: {
             {renderHeader ? (
                 <div className="flex items-center justify-between px-3 py-1">
                     <div className="text-xs text-[var(--app-hint)]">
-                        {t('sessions.count', { n: props.sessions.length, m: groups.length })}
+                        {t('sessions.count', { n: visibleSessions.length, m: groups.length })}
                     </div>
                     <button
                         type="button"

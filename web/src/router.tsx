@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
     Navigate,
@@ -13,7 +13,7 @@ import {
 } from '@tanstack/react-router'
 import { App } from '@/App'
 import { SessionChat } from '@/components/SessionChat'
-import { SessionList } from '@/components/SessionList'
+import { SessionList, filterVisibleSessions, getSessionDirectory } from '@/components/SessionList'
 import { NewSession } from '@/components/NewSession'
 import { LoadingState } from '@/components/LoadingState'
 import { useAppContext } from '@/lib/app-context'
@@ -107,9 +107,13 @@ function SessionsPage() {
         void refetch()
     }, [refetch])
 
-    const projectCount = new Set(sessions.map(s => s.metadata?.worktree?.basePath ?? s.metadata?.path ?? 'Other')).size
     const sessionMatch = matchRoute({ to: '/sessions/$sessionId', fuzzy: true })
     const selectedSessionId = sessionMatch && sessionMatch.sessionId !== 'new' ? sessionMatch.sessionId : null
+    const visibleSessions = useMemo(
+        () => filterVisibleSessions(sessions, selectedSessionId),
+        [sessions, selectedSessionId]
+    )
+    const visibleProjectCount = new Set(visibleSessions.map(getSessionDirectory)).size
     const isSessionsIndex = pathname === '/sessions' || pathname === '/sessions/'
 
     return (
@@ -120,7 +124,7 @@ function SessionsPage() {
                 <div className="bg-[var(--app-bg)] pt-[env(safe-area-inset-top)]">
                     <div className="mx-auto w-full max-w-content flex items-center justify-between px-3 py-2">
                         <div className="text-xs text-[var(--app-hint)]">
-                            {t('sessions.count', { n: sessions.length, m: projectCount })}
+                            {t('sessions.count', { n: visibleSessions.length, m: visibleProjectCount })}
                         </div>
                         <div className="flex items-center gap-2">
                             <button
@@ -150,7 +154,7 @@ function SessionsPage() {
                         </div>
                     ) : null}
                     <SessionList
-                        sessions={sessions}
+                        sessions={visibleSessions}
                         selectedSessionId={selectedSessionId}
                         onSelect={(sessionId) => navigate({
                             to: '/sessions/$sessionId',

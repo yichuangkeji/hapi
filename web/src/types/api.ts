@@ -99,6 +99,8 @@ export type SpawnResponse =
     | { type: 'success'; sessionId: string }
     | { type: 'error'; message: string }
 
+export type ActivateSessionResponse = { type: 'success'; sessionId: string }
+
 export type GitCommandResponse = {
     success: boolean
     stdout?: string

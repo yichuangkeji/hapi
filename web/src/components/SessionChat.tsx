@@ -245,6 +245,13 @@ export function SessionChat(props: {
         })
     }, [navigate, props.session.id])
 
+    const handleSessionActivated = useCallback((sessionId: string) => {
+        navigate({
+            to: '/sessions/$sessionId',
+            params: { sessionId }
+        })
+    }, [navigate])
+
     const handleSend = useCallback((text: string, attachments?: AttachmentMetadata[]) => {
         props.onSend(text, attachments)
         setForceScrollToken((token) => token + 1)
@@ -274,6 +281,7 @@ export function SessionChat(props: {
                 onBack={props.onBack}
                 onViewFiles={props.session.metadata?.path ? handleViewFiles : undefined}
                 api={props.api}
+                onSessionActivated={handleSessionActivated}
                 onSessionDeleted={props.onBack}
             />
 

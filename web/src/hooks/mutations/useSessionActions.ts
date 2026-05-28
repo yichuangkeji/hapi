@@ -12,6 +12,7 @@ export function useSessionActions(
     agentFlavor?: string | null
 ): {
     abortSession: () => Promise<void>
+    activateSession: () => Promise<string>
     archiveSession: () => Promise<void>
     switchSession: () => Promise<void>
     setPermissionMode: (mode: PermissionMode) => Promise<void>
@@ -46,6 +47,19 @@ export function useSessionActions(
             await api.archiveSession(sessionId)
         },
         onSuccess: () => void invalidateSession(),
+    })
+
+    const activateMutation = useMutation({
+        mutationFn: async () => {
+            if (!api || !sessionId) {
+                throw new Error('Session unavailable')
+            }
+            return await api.activateSession(sessionId)
+        },
+        onSuccess: async (activatedSessionId) => {
+            await invalidateSession()
+            await queryClient.invalidateQueries({ queryKey: queryKeys.session(activatedSessionId) })
+        },
     })
 
     const switchMutation = useMutation({
@@ -108,6 +122,7 @@ export function useSessionActions(
 
     return {
         abortSession: abortMutation.mutateAsync,
+        activateSession: activateMutation.mutateAsync,
         archiveSession: archiveMutation.mutateAsync,
         switchSession: switchMutation.mutateAsync,
         setPermissionMode: permissionMutation.mutateAsync,
@@ -115,6 +130,7 @@ export function useSessionActions(
         renameSession: renameMutation.mutateAsync,
         deleteSession: deleteMutation.mutateAsync,
         isPending: abortMutation.isPending
+            || activateMutation.isPending
             || archiveMutation.isPending
             || switchMutation.isPending
             || permissionMutation.isPending

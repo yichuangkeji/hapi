@@ -43,6 +43,18 @@ export type ResumeSessionResult =
     | { type: 'success'; sessionId: string }
     | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'no_machine_online' | 'resume_unavailable' | 'resume_failed' }
 
+export type ActivateSessionResult =
+    | { type: 'success'; sessionId: string }
+    | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'session_active' | 'no_machine_online' | 'activate_unavailable' | 'activate_failed' }
+
+type SpawnAgent = 'claude' | 'codex' | 'cursor' | 'gemini' | 'opencode'
+
+function resolveSpawnAgent(flavor?: string | null): SpawnAgent {
+    return flavor === 'codex' || flavor === 'gemini' || flavor === 'opencode' || flavor === 'cursor'
+        ? flavor
+        : 'claude'
+}
+
 function buildClearedSessionMetadata(session: Session): Session['metadata'] {
     const metadata = session.metadata
     if (!metadata) {
@@ -250,7 +262,56 @@ export class SyncEngine {
     }
 
     getOrCreateSession(tag: string, metadata: unknown, agentState: unknown, namespace: string): Session {
-        return this.sessionCache.getOrCreateSession(tag, metadata, agentState, namespace)
+        const session = this.sessionCache.getOrCreateSession(tag, metadata, agentState, namespace)
+        // 新会话写入后立即按目录去重，确保同一路径只保留最新记录。
+        void this.pruneDuplicateSessionsByPath(namespace).catch(() => undefined)
+        return session
+    }
+
+    async pruneDuplicateSessionsByPath(namespace: string): Promise<void> {
+        const groups = new Map<string, Session[]>()
+
+        for (const session of this.sessionCache.getSessionsByNamespace(namespace)) {
+            const rawPath = session.metadata?.path?.trim()
+            const path = rawPath ? (rawPath.replace(/[\\/]+$/, '') || rawPath) : null
+            if (!path) continue
+            const current = groups.get(path)
+            if (current) {
+                current.push(session)
+            } else {
+                groups.set(path, [session])
+            }
+        }
+
+        for (const sessions of groups.values()) {
+            if (sessions.length <= 1) continue
+
+            const sorted = [...sessions].sort((a, b) => {
+                const freshnessA = Math.max(a.updatedAt, a.createdAt)
+                const freshnessB = Math.max(b.updatedAt, b.createdAt)
+                if (freshnessA !== freshnessB) return freshnessB - freshnessA
+                return b.createdAt - a.createdAt
+            })
+
+            const [, ...duplicates] = sorted
+            for (const duplicate of duplicates) {
+                try {
+                    await this.deleteDuplicateSessionRecord(duplicate)
+                } catch {
+                    // 单条重复记录清理失败时不阻断列表接口，后续请求会再次尝试。
+                }
+            }
+        }
+    }
+
+    private async deleteDuplicateSessionRecord(session: Session): Promise<void> {
+        if (session.active) {
+            // 重复记录按用户规则必须清掉；结束进程尽力而为，不能阻塞 Hub 记录删除。
+            void this.rpcGateway.killSession(session.id).catch(() => undefined)
+            this.sessionCache.handleSessionEnd({ sid: session.id, time: Date.now() })
+        }
+
+        await this.sessionCache.deleteSession(session.id, { allowActive: true })
     }
 
     getOrCreateMachine(id: string, metadata: unknown, runnerState: unknown, namespace: string): Machine {
@@ -422,9 +483,7 @@ export class SyncEngine {
             return { type: 'error', message: 'Session metadata missing path', code: 'resume_unavailable' }
         }
 
-        const flavor = metadata.flavor === 'codex' || metadata.flavor === 'gemini' || metadata.flavor === 'opencode' || metadata.flavor === 'cursor'
-            ? metadata.flavor
-            : 'claude'
+        const flavor = resolveSpawnAgent(metadata.flavor)
         const resumeToken = flavor === 'codex'
             ? metadata.codexSessionId
             : flavor === 'gemini'
@@ -488,6 +547,67 @@ export class SyncEngine {
                 return { type: 'error', message, code: 'resume_failed' }
             }
         }
+
+        return { type: 'success', sessionId: spawnResult.sessionId }
+    }
+
+    async activateSession(sessionId: string, namespace: string): Promise<ActivateSessionResult> {
+        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        if (!access.ok) {
+            return {
+                type: 'error',
+                message: access.reason === 'access-denied' ? 'Session access denied' : 'Session not found',
+                code: access.reason === 'access-denied' ? 'access_denied' : 'session_not_found'
+            }
+        }
+
+        const session = access.session
+        if (session.active) {
+            return { type: 'error', message: 'Session is already active', code: 'session_active' }
+        }
+
+        const metadata = session.metadata
+        if (!metadata || typeof metadata.path !== 'string') {
+            return { type: 'error', message: 'Session metadata missing path', code: 'activate_unavailable' }
+        }
+
+        const onlineMachines = this.machineCache.getOnlineMachinesByNamespace(namespace)
+        if (onlineMachines.length === 0) {
+            return { type: 'error', message: 'No machine online', code: 'no_machine_online' }
+        }
+
+        const targetMachine = (() => {
+            if (metadata.machineId) {
+                const exact = onlineMachines.find((machine) => machine.id === metadata.machineId)
+                if (exact) return exact
+            }
+            if (metadata.host) {
+                const hostMatch = onlineMachines.find((machine) => machine.metadata?.host === metadata.host)
+                if (hostMatch) return hostMatch
+            }
+            return null
+        })()
+
+        if (!targetMachine) {
+            return { type: 'error', message: 'No matching machine online', code: 'no_machine_online' }
+        }
+
+        // 激活旧会话时启动全新对话：复用目录和 agent 类型，但不传入 resume token。
+        const spawnResult = await this.rpcGateway.spawnSession(
+            targetMachine.id,
+            metadata.path,
+            resolveSpawnAgent(metadata.flavor)
+        )
+        if (spawnResult.type !== 'success') {
+            return { type: 'error', message: spawnResult.message, code: 'activate_failed' }
+        }
+
+        const becameActive = await this.waitForSessionActive(spawnResult.sessionId)
+        if (!becameActive) {
+            return { type: 'error', message: 'Session failed to become active', code: 'activate_failed' }
+        }
+
+        await this.pruneDuplicateSessionsByPath(namespace)
 
         return { type: 'success', sessionId: spawnResult.sessionId }
     }

@@ -62,9 +62,11 @@ export default {
 
   // Session actions
   'session.action.rename': '重命名',
+  'session.action.activate': '激活',
   'session.action.archive': '归档',
   'session.action.delete': '删除',
   'session.action.copy': '复制',
+  'session.activate.failed': '激活失败',
 
   // Dialogs
   'dialog.rename.title': '重命名会话',

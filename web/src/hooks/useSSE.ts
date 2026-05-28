@@ -500,7 +500,11 @@ export function useSSE(options: {
                     clearMessageWindow(event.sessionId)
                 } else if (isSessionRecord(event.data) && event.data.id === event.sessionId) {
                     queryClient.setQueryData<SessionResponse>(queryKeys.session(event.sessionId), { session: event.data })
-                    upsertSessionSummary(event.data)
+                    if (event.data.metadata?.supersededBySessionId) {
+                        removeSessionSummary(event.sessionId)
+                    } else {
+                        upsertSessionSummary(event.data)
+                    }
                 } else {
                     const patch = getSessionPatch(event.data)
                     if (patch) {

@@ -269,13 +269,13 @@ export class SessionCache {
         this.refreshSession(sessionId)
     }
 
-    async deleteSession(sessionId: string): Promise<void> {
+    async deleteSession(sessionId: string, options?: { allowActive?: boolean }): Promise<void> {
         const session = this.sessions.get(sessionId)
         if (!session) {
             throw new Error('Session not found')
         }
 
-        if (session.active) {
+        if (session.active && options?.allowActive !== true) {
             throw new Error('Cannot delete active session')
         }
 
