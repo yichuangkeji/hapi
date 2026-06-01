@@ -28,6 +28,23 @@ export interface StartOptions {
     startedBy?: 'runner' | 'terminal'
 }
 
+function extractClaudeResumeSessionId(args?: string[]): string | null {
+    if (!args) {
+        return null;
+    }
+    for (let i = 0; i < args.length; i += 1) {
+        if (args[i] !== '--resume') {
+            continue;
+        }
+        const candidate = args[i + 1];
+        if (candidate && !candidate.startsWith('-')) {
+            return candidate;
+        }
+        return null;
+    }
+    return null;
+}
+
 export async function runClaude(options: StartOptions = {}): Promise<void> {
     const workingDirectory = process.cwd();
     const startedBy = options.startedBy ?? 'terminal';
@@ -45,12 +62,13 @@ export async function runClaude(options: StartOptions = {}): Promise<void> {
     }
 
     const initialState: AgentState = {};
+    const resumeSessionId = extractClaudeResumeSessionId(options.claudeArgs);
     const { api, session, sessionInfo } = await bootstrapSession({
         flavor: 'claude',
         startedBy,
         workingDirectory,
         agentState: initialState,
-        resumeSessionId: options.claudeArgs?.includes('--resume') ? '__resume__' : null
+        resumeSessionId
     });
     logger.debug(`Session created: ${sessionInfo.id}`);
 
@@ -359,7 +377,8 @@ export async function runClaude(options: StartOptions = {}): Promise<void> {
             claudeEnvVars: options.claudeEnvVars,
             claudeArgs: options.claudeArgs,
             startedBy,
-            hookSettingsPath
+            hookSettingsPath,
+            resumeSessionId: resumeSessionId ?? undefined
         });
     } catch (error) {
         loopError = error;

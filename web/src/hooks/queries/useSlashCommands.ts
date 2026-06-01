@@ -27,6 +27,7 @@ function levenshteinDistance(a: string, b: string): number {
  */
 const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
     claude: [
+        { name: 'resume', description: 'Resume a previous conversation in the current directory', source: 'builtin' },
         { name: 'clear', description: 'Clear conversation history and free up context', source: 'builtin' },
         { name: 'compact', description: 'Clear conversation history but keep a summary in context', source: 'builtin' },
         { name: 'compat', description: 'Alias for /compact', source: 'builtin' },
@@ -38,6 +39,7 @@ const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
         { name: 'status', description: 'Show Claude Code status including version, model, account, and API connectivity', source: 'builtin' },
     ],
     codex: [
+        { name: 'resume', description: 'Resume a previous conversation in the current directory', source: 'builtin' },
         { name: 'clear', description: 'Reset the current Codex conversation and start fresh', source: 'builtin' },
         { name: 'compact', description: 'Summarize conversation to prevent hitting the context limit', source: 'builtin' },
         { name: 'review', description: 'Review current changes and find issues', source: 'builtin' },
@@ -48,12 +50,15 @@ const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
         { name: 'status', description: 'Show current session configuration and token usage', source: 'builtin' },
     ],
     gemini: [
+        { name: 'resume', description: 'Resume a previous conversation in the current directory', source: 'builtin' },
         { name: 'about', description: 'Show version info', source: 'builtin' },
         { name: 'clear', description: 'Clear the screen and conversation history', source: 'builtin' },
         { name: 'compress', description: 'Compress the context by replacing it with a summary', source: 'builtin' },
         { name: 'stats', description: 'Check session stats', source: 'builtin' },
     ],
-    opencode: [],
+    opencode: [
+        { name: 'resume', description: 'Resume a previous conversation in the current directory', source: 'builtin' },
+    ],
 }
 
 export function useSlashCommands(

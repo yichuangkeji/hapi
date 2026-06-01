@@ -241,6 +241,8 @@ export default {
   'send.blocked.noConnection': '未连接到服务器',
   'session.resume.inactive': '当前会话未激活。输入 /resume 可重新激活，也可以直接发送消息自动恢复。',
   'session.resume.failed': '恢复失败',
+  'session.resume.noneInDirectory': '当前目录没有可恢复的历史会话。',
+  'session.resume.recordDescription': '{agent} · {time}',
 
   // Install prompt
   'install.title': '安装 HAPI',

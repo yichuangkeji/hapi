@@ -11,6 +11,7 @@ import { SDKToLogConverter } from "./utils/sdkToLogConverter";
 import { PLAN_FAKE_REJECT } from "./sdk/prompts";
 import { EnhancedMode } from "./loop";
 import { OutgoingMessageQueue } from "./utils/OutgoingMessageQueue";
+import { readClaudeSessionMessages } from "./utils/sessionScanner";
 import type { ClaudePermissionMode } from "@hapi/protocol/types";
 import {
     RemoteLauncherBase,
@@ -31,6 +32,7 @@ class ClaudeRemoteLauncher extends RemoteLauncherBase {
     private abortFuture: Future<void> | null = null;
     private permissionHandler: PermissionHandler | null = null;
     private handleSessionFound: ((sessionId: string) => void) | null = null;
+    private importedResumeHistorySessionId: string | null = null;
 
     constructor(session: Session) {
         super(process.env.DEBUG ? session.logPath : undefined);
@@ -72,6 +74,27 @@ class ClaudeRemoteLauncher extends RemoteLauncherBase {
         await this.handleSwitchRequest();
     }
 
+    private async importResumeHistoryIfNeeded(): Promise<void> {
+        const resumeSessionId = this.session.sessionId;
+        if (!resumeSessionId || this.importedResumeHistorySessionId === resumeSessionId) {
+            return;
+        }
+        if (process.env.HAPI_IMPORT_RESUME_HISTORY !== '1') {
+            return;
+        }
+
+        this.importedResumeHistorySessionId = resumeSessionId;
+        const messages = await readClaudeSessionMessages(resumeSessionId, this.session.path);
+        for (const message of messages) {
+            this.session.client.sendClaudeSessionMessage(message);
+        }
+
+        if (messages.length > 0) {
+            logger.debug(`[remote]: Imported ${messages.length} Claude messages from resume history ${resumeSessionId}`);
+            this.session.client.sendSessionEvent({ type: 'ready' });
+        }
+    }
+
     public async launch(): Promise<RemoteLauncherExitReason> {
         return this.start({
             onExit: () => this.handleExitFromUi(),
@@ -90,6 +113,8 @@ class ClaudeRemoteLauncher extends RemoteLauncherBase {
             onAbort: () => this.handleAbortRequest(),
             onSwitch: () => this.handleSwitchRequest()
         });
+
+        await this.importResumeHistoryIfNeeded();
 
         const permissionHandler = new PermissionHandler(session);
         this.permissionHandler = permissionHandler;

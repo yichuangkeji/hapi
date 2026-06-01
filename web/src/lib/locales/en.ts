@@ -239,6 +239,8 @@ export default {
   'send.blocked.noConnection': 'Not connected to server',
   'session.resume.inactive': 'Session is inactive. Type /resume to reactivate it, or send a message to resume automatically.',
   'session.resume.failed': 'Resume failed',
+  'session.resume.noneInDirectory': 'No resumable sessions found in this directory.',
+  'session.resume.recordDescription': '{agent} · {time}',
 
   // Install prompt
   'install.title': 'Install HAPI',

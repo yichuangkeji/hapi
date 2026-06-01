@@ -30,7 +30,9 @@ import { queryKeys } from '@/lib/query-keys'
 import { useToast } from '@/lib/toast-context'
 import { useTranslation } from '@/lib/use-translation'
 import { clearMessageWindow, fetchLatestMessages, seedMessageWindowFromSession } from '@/lib/message-window-store'
-import type { AttachmentMetadata } from '@/types/api'
+import type { AttachmentMetadata, ResumeRecord, Session, SessionSummary } from '@/types/api'
+import type { Suggestion } from '@/hooks/useActiveSuggestions'
+import { basename } from '@/utils/path'
 import FilesPage from '@/routes/sessions/files'
 import FilePage from '@/routes/sessions/file'
 import TerminalPage from '@/routes/sessions/terminal'
@@ -93,6 +95,112 @@ function SettingsIcon(props: { className?: string }) {
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
         </svg>
     )
+}
+
+type ResumeSessionCandidate = {
+    kind: 'session'
+    id: string
+    agent: string
+    title: string
+    updatedAt?: number
+}
+
+type ResumeRecordCandidate = {
+    kind: 'record'
+    id: string
+    agent: ResumeRecord['agent']
+    title: string
+    updatedAt?: number
+}
+
+type ResumeCandidate = ResumeSessionCandidate | ResumeRecordCandidate
+
+function normalizeSessionPath(path?: string | null): string | null {
+    const rawPath = path?.trim()
+    if (!rawPath) return null
+    return rawPath.replace(/[\\/]+$/, '') || rawPath
+}
+
+function getResumeToken(session: Session): string | null {
+    const metadata = session.metadata
+    if (!metadata) return null
+
+    const flavor = metadata.flavor
+    if (flavor === 'codex') return metadata.codexSessionId ?? null
+    if (flavor === 'gemini') return metadata.geminiSessionId ?? null
+    if (flavor === 'opencode') return metadata.opencodeSessionId ?? null
+    if (flavor === 'cursor') return metadata.cursorSessionId ?? null
+    return metadata.claudeSessionId ?? null
+}
+
+function getSessionResumeTitle(session: SessionSummary): string {
+    if (session.metadata?.name) return session.metadata.name
+    if (session.metadata?.summary?.text) return session.metadata.summary.text
+    if (session.metadata?.path) return basename(session.metadata.path) || session.id.slice(0, 8)
+    return session.id.slice(0, 8)
+}
+
+function getHapiResumeCandidates(currentSession: Session, sessions: SessionSummary[]): ResumeSessionCandidate[] {
+    const currentPath = normalizeSessionPath(currentSession.metadata?.path)
+    if (!currentPath) return []
+
+    return sessions
+        .filter((candidate) => {
+            if (candidate.id === currentSession.id) return false
+            if (candidate.active) return false
+            if (candidate.resumable !== true) return false
+            return normalizeSessionPath(candidate.metadata?.path) === currentPath
+        })
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .map((candidate) => ({
+            kind: 'session' as const,
+            id: candidate.id,
+            agent: candidate.metadata?.flavor?.trim() || 'claude',
+            title: getSessionResumeTitle(candidate),
+            updatedAt: candidate.updatedAt
+        }))
+}
+
+function shouldShowResumeCandidates(query: string): boolean {
+    if (!query.startsWith('/')) return false
+    const term = query.slice(1).toLowerCase()
+    return term.length > 0 && ('resume'.startsWith(term) || term.startsWith('resume'))
+}
+
+function toResumeSuggestion(
+    candidate: ResumeCandidate,
+    t: (key: string, params?: Record<string, string | number>) => string
+): Suggestion {
+    const time = candidate.updatedAt ? formatResumeTime(candidate.updatedAt, t) : null
+    const description = time
+        ? t('session.resume.recordDescription', { agent: candidate.agent, time })
+        : candidate.agent
+
+    return {
+        key: `resume:${candidate.kind}:${candidate.id}`,
+        text: `/resume ${candidate.id}`,
+        label: `/resume ${candidate.title}`,
+        description,
+        source: 'builtin'
+    }
+}
+
+function formatResumeTime(value: number, t: (key: string, params?: Record<string, string | number>) => string): string {
+    const ms = value < 1_000_000_000_000 ? value * 1000 : value
+    const delta = Date.now() - ms
+    if (!Number.isFinite(ms) || delta < 0) return new Date(ms).toLocaleString()
+    if (delta < 60_000) return t('session.time.justNow')
+    const minutes = Math.floor(delta / 60_000)
+    if (minutes < 60) return t('session.time.minutesAgo', { n: minutes })
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return t('session.time.hoursAgo', { n: hours })
+    const days = Math.floor(hours / 24)
+    if (days < 7) return t('session.time.daysAgo', { n: days })
+    return new Date(ms).toLocaleDateString()
+}
+
+function matchesResumeId(candidateId: string, input: string): boolean {
+    return candidateId === input || candidateId.startsWith(input)
 }
 
 function SessionsPage() {
@@ -195,6 +303,7 @@ function SessionPage() {
         session,
         refetch: refetchSession,
     } = useSession(api, sessionId)
+    const { sessions } = useSessions(api)
     const {
         messages,
         warning: messagesWarning,
@@ -271,14 +380,46 @@ function SessionPage() {
         }
     })
 
-    const handleResume = useCallback(async () => {
-        if (!api || !session || !sessionId || session.active || isResuming) {
+    const hapiResumeCandidates = useMemo(
+        () => session ? getHapiResumeCandidates(session, sessions) : [],
+        [session, sessions]
+    )
+    const agentType = session?.metadata?.flavor ?? 'claude'
+
+    const resumeSessionById = useCallback(async (targetSessionId: string) => {
+        if (!api || isResuming) {
             return
         }
 
         setIsResuming(true)
         try {
-            const resolvedSessionId = await api.resumeSession(sessionId)
+            const resolvedSessionId = await api.resumeSession(targetSessionId)
+            // 从当前 active 会话跳到旧 HAPI 会话时，关闭当前 CLI，避免同目录下并行两个 agent。
+            if (session?.active && session.id !== targetSessionId && session.id !== resolvedSessionId) {
+                await api.archiveSession(session.id).catch(() => {})
+            }
+            handleSessionResolved(resolvedSessionId)
+        } catch (error) {
+            const message = error instanceof Error ? error.message : t('session.resume.failed')
+            addToast({
+                title: t('session.resume.failed'),
+                body: message,
+                sessionId: targetSessionId,
+                url: ''
+            })
+        } finally {
+            setIsResuming(false)
+        }
+    }, [addToast, api, handleSessionResolved, isResuming, session, t])
+
+    const resumeRecordById = useCallback(async (resumeSessionId: string, agent: string = agentType) => {
+        if (!api || !sessionId || isResuming) {
+            return
+        }
+
+        setIsResuming(true)
+        try {
+            const resolvedSessionId = await api.resumeRecord(sessionId, { resumeSessionId, agent })
             handleSessionResolved(resolvedSessionId)
         } catch (error) {
             const message = error instanceof Error ? error.message : t('session.resume.failed')
@@ -291,15 +432,84 @@ function SessionPage() {
         } finally {
             setIsResuming(false)
         }
-    }, [addToast, api, handleSessionResolved, isResuming, session, sessionId, t])
+    }, [addToast, agentType, api, handleSessionResolved, isResuming, sessionId, t])
 
-    // Get agent type from session metadata for slash commands
-    const agentType = session?.metadata?.flavor ?? 'claude'
+    const fetchResumeRecordCandidates = useCallback(async (): Promise<ResumeRecordCandidate[]> => {
+        if (!api || !session || !sessionId || !session.active) {
+            return []
+        }
+        const currentToken = getResumeToken(session)
+        const result = await api.getResumeRecords(sessionId, agentType)
+        if (!result.success || !result.records) {
+            return []
+        }
+
+        return result.records
+            .filter((record) => record.id !== currentToken)
+            .map((record) => ({
+                kind: 'record' as const,
+                id: record.id,
+                agent: record.agent,
+                title: record.title?.trim() || record.id.slice(0, 8),
+                updatedAt: record.updatedAt
+            }))
+    }, [agentType, api, session, sessionId])
+
+    const handleResumeCommand = useCallback(async (trimmed: string) => {
+        const [, rawTarget] = trimmed.split(/\s+/, 2)
+        const target = rawTarget?.trim()
+
+        if (target) {
+            const hapiCandidate = hapiResumeCandidates.find((candidate) => matchesResumeId(candidate.id, target))
+            if (hapiCandidate) {
+                await resumeSessionById(hapiCandidate.id)
+                return
+            }
+            await resumeRecordById(target)
+            return
+        }
+
+        if (session && !session.active) {
+            await resumeSessionById(session.id)
+            return
+        }
+
+        const recordCandidates = await fetchResumeRecordCandidates().catch(() => [])
+        const latestRecord = recordCandidates[0]
+        if (latestRecord) {
+            await resumeRecordById(latestRecord.id, latestRecord.agent)
+            return
+        }
+
+        const latestHapiSession = hapiResumeCandidates[0]
+        if (latestHapiSession) {
+            await resumeSessionById(latestHapiSession.id)
+            return
+        }
+
+        addToast({
+            title: t('session.resume.failed'),
+            body: t('session.resume.noneInDirectory'),
+            sessionId: sessionId ?? '',
+            url: ''
+        })
+    }, [
+        addToast,
+        fetchResumeRecordCandidates,
+        hapiResumeCandidates,
+        resumeRecordById,
+        resumeSessionById,
+        session,
+        sessionId,
+        t
+    ])
 
     const handleSend = useCallback((text: string, attachments?: AttachmentMetadata[]) => {
         const trimmed = text.trim()
-        if (!session?.active && trimmed === '/resume' && (!attachments || attachments.length === 0)) {
-            void handleResume()
+        const hasAttachments = Boolean(attachments && attachments.length > 0)
+        const normalizedCommand = trimmed.toLowerCase()
+        if (!hasAttachments && (normalizedCommand === '/resume' || normalizedCommand.startsWith('/resume '))) {
+            void handleResumeCommand(trimmed)
             return
         }
 
@@ -348,7 +558,7 @@ function SessionPage() {
         }
 
         sendMessage(text, attachments)
-    }, [addToast, agentType, api, handleResume, queryClient, sendMessage, session, sessionId])
+    }, [addToast, agentType, api, handleResumeCommand, queryClient, sendMessage, sessionId])
     const {
         getSuggestions: getSlashSuggestions,
     } = useSlashCommands(api, sessionId, agentType)
@@ -360,8 +570,17 @@ function SessionPage() {
         if (query.startsWith('$')) {
             return await getSkillSuggestions(query)
         }
+        if (shouldShowResumeCandidates(query)) {
+            const [slashSuggestions, recordCandidates] = await Promise.all([
+                getSlashSuggestions(query),
+                fetchResumeRecordCandidates().catch(() => [])
+            ])
+            const candidates: ResumeCandidate[] = [...recordCandidates, ...hapiResumeCandidates]
+            const resumeSuggestions = candidates.map((candidate) => toResumeSuggestion(candidate, t))
+            return resumeSuggestions.length > 0 ? resumeSuggestions : slashSuggestions
+        }
         return await getSlashSuggestions(query)
-    }, [getSkillSuggestions, getSlashSuggestions])
+    }, [fetchResumeRecordCandidates, getSkillSuggestions, getSlashSuggestions, hapiResumeCandidates, t])
 
     const refreshSelectedSession = useCallback(() => {
         void refetchSession()

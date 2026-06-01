@@ -23,6 +23,7 @@ import {
     type RpcListDirectoryResponse,
     type RpcPathExistsResponse,
     type RpcReadFileResponse,
+    type RpcResumeRecordsResponse,
     type RpcUploadFileResponse
 } from './rpcGateway'
 import { SessionCache } from './sessionCache'
@@ -36,10 +37,15 @@ export type {
     RpcListDirectoryResponse,
     RpcPathExistsResponse,
     RpcReadFileResponse,
+    RpcResumeRecordsResponse,
     RpcUploadFileResponse
 } from './rpcGateway'
 
 export type ResumeSessionResult =
+    | { type: 'success'; sessionId: string }
+    | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'no_machine_online' | 'resume_unavailable' | 'resume_failed' }
+
+export type ResumeRecordResult =
     | { type: 'success'; sessionId: string }
     | { type: 'error'; message: string; code: 'session_not_found' | 'access_denied' | 'no_machine_online' | 'resume_unavailable' | 'resume_failed' }
 
@@ -263,55 +269,13 @@ export class SyncEngine {
 
     getOrCreateSession(tag: string, metadata: unknown, agentState: unknown, namespace: string): Session {
         const session = this.sessionCache.getOrCreateSession(tag, metadata, agentState, namespace)
-        // 新会话写入后立即按目录去重，确保同一路径只保留最新记录。
+        // 保留同一路径的历史会话，Web 的 /resume 需要这些记录作为可恢复入口。
         void this.pruneDuplicateSessionsByPath(namespace).catch(() => undefined)
         return session
     }
 
     async pruneDuplicateSessionsByPath(namespace: string): Promise<void> {
-        const groups = new Map<string, Session[]>()
-
-        for (const session of this.sessionCache.getSessionsByNamespace(namespace)) {
-            const rawPath = session.metadata?.path?.trim()
-            const path = rawPath ? (rawPath.replace(/[\\/]+$/, '') || rawPath) : null
-            if (!path) continue
-            const current = groups.get(path)
-            if (current) {
-                current.push(session)
-            } else {
-                groups.set(path, [session])
-            }
-        }
-
-        for (const sessions of groups.values()) {
-            if (sessions.length <= 1) continue
-
-            const sorted = [...sessions].sort((a, b) => {
-                const freshnessA = Math.max(a.updatedAt, a.createdAt)
-                const freshnessB = Math.max(b.updatedAt, b.createdAt)
-                if (freshnessA !== freshnessB) return freshnessB - freshnessA
-                return b.createdAt - a.createdAt
-            })
-
-            const [, ...duplicates] = sorted
-            for (const duplicate of duplicates) {
-                try {
-                    await this.deleteDuplicateSessionRecord(duplicate)
-                } catch {
-                    // 单条重复记录清理失败时不阻断列表接口，后续请求会再次尝试。
-                }
-            }
-        }
-    }
-
-    private async deleteDuplicateSessionRecord(session: Session): Promise<void> {
-        if (session.active) {
-            // 重复记录按用户规则必须清掉；结束进程尽力而为，不能阻塞 Hub 记录删除。
-            void this.rpcGateway.killSession(session.id).catch(() => undefined)
-            this.sessionCache.handleSessionEnd({ sid: session.id, time: Date.now() })
-        }
-
-        await this.sessionCache.deleteSession(session.id, { allowActive: true })
+        void namespace
     }
 
     getOrCreateMachine(id: string, metadata: unknown, runnerState: unknown, namespace: string): Machine {
@@ -458,9 +422,26 @@ export class SyncEngine {
         yolo?: boolean,
         sessionType?: 'simple' | 'worktree',
         worktreeName?: string,
-        resumeSessionId?: string
+        resumeSessionId?: string,
+        importResumeHistory?: boolean
     ): Promise<{ type: 'success'; sessionId: string } | { type: 'error'; message: string }> {
-        return await this.rpcGateway.spawnSession(machineId, directory, agent, model, yolo, sessionType, worktreeName, resumeSessionId)
+        return await this.rpcGateway.spawnSession(machineId, directory, agent, model, yolo, sessionType, worktreeName, resumeSessionId, importResumeHistory)
+    }
+
+    async listResumeRecords(sessionId: string, namespace: string, agent?: string): Promise<RpcResumeRecordsResponse> {
+        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        if (!access.ok) {
+            return {
+                success: false,
+                error: access.reason === 'access-denied' ? 'Session access denied' : 'Session not found'
+            }
+        }
+        if (!access.session.active) {
+            return { success: false, error: 'Session is inactive' }
+        }
+
+        const resolvedAgent = agent ?? resolveSpawnAgent(access.session.metadata?.flavor)
+        return await this.rpcGateway.listResumeRecords(access.sessionId, resolvedAgent)
     }
 
     async resumeSession(sessionId: string, namespace: string): Promise<ResumeSessionResult> {
@@ -546,6 +527,79 @@ export class SyncEngine {
                 const message = error instanceof Error ? error.message : 'Failed to merge resumed session'
                 return { type: 'error', message, code: 'resume_failed' }
             }
+        }
+
+        return { type: 'success', sessionId: spawnResult.sessionId }
+    }
+
+    async resumeRecord(
+        sessionId: string,
+        namespace: string,
+        input: { agent?: string; resumeSessionId: string }
+    ): Promise<ResumeRecordResult> {
+        const access = this.sessionCache.resolveSessionAccess(sessionId, namespace)
+        if (!access.ok) {
+            return {
+                type: 'error',
+                message: access.reason === 'access-denied' ? 'Session access denied' : 'Session not found',
+                code: access.reason === 'access-denied' ? 'access_denied' : 'session_not_found'
+            }
+        }
+
+        const metadata = access.session.metadata
+        if (!metadata || typeof metadata.path !== 'string') {
+            return { type: 'error', message: 'Session metadata missing path', code: 'resume_unavailable' }
+        }
+
+        const onlineMachines = this.machineCache.getOnlineMachinesByNamespace(namespace)
+        if (onlineMachines.length === 0) {
+            return { type: 'error', message: 'No machine online', code: 'no_machine_online' }
+        }
+
+        const targetMachine = (() => {
+            if (metadata.machineId) {
+                const exact = onlineMachines.find((machine) => machine.id === metadata.machineId)
+                if (exact) return exact
+            }
+            if (metadata.host) {
+                const hostMatch = onlineMachines.find((machine) => machine.metadata?.host === metadata.host)
+                if (hostMatch) return hostMatch
+            }
+            return null
+        })()
+
+        if (!targetMachine) {
+            return { type: 'error', message: 'No machine online', code: 'no_machine_online' }
+        }
+
+        const spawnResult = await this.rpcGateway.spawnSession(
+            targetMachine.id,
+            metadata.path,
+            resolveSpawnAgent(input.agent ?? metadata.flavor),
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            input.resumeSessionId,
+            true
+        )
+
+        if (spawnResult.type !== 'success') {
+            return { type: 'error', message: spawnResult.message, code: 'resume_failed' }
+        }
+
+        const becameActive = await this.waitForSessionActive(spawnResult.sessionId)
+        if (!becameActive) {
+            return { type: 'error', message: 'Session failed to become active', code: 'resume_failed' }
+        }
+
+        // 原生 resume 记录会启动一个新 CLI；成功后关闭发起命令的旧 active CLI，避免同目录两个 agent 并行。
+        if (access.session.active && access.sessionId !== spawnResult.sessionId) {
+            try {
+                await this.rpcGateway.killSession(access.sessionId)
+            } catch {
+            }
+            this.handleSessionEnd({ sid: access.sessionId, time: Date.now() })
         }
 
         return { type: 'success', sessionId: spawnResult.sessionId }

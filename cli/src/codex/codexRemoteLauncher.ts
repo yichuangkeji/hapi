@@ -19,6 +19,8 @@ import { AppServerEventConverter } from './utils/appServerEventConverter';
 import { registerAppServerPermissionHandlers } from './utils/appServerPermissionAdapter';
 import { buildThreadStartParams, buildTurnStartParams } from './utils/appServerConfig';
 import { shouldIgnoreTerminalEvent } from './utils/terminalEventGuard';
+import { convertCodexEvent } from './utils/codexEventConverter';
+import { readCodexSessionEvents } from './utils/codexSessionScanner';
 import {
     RemoteLauncherBase,
     type RemoteLauncherDisplayContext,
@@ -47,6 +49,7 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
     private resetConversationCallback: (() => Promise<void>) | null = null;
     private compactConversationCallback: (() => Promise<void>) | null = null;
     private suppressNextAbortMessage = false;
+    private importedResumeHistorySessionId: string | null = null;
 
     constructor(session: CodexSession) {
         super(process.env.DEBUG ? session.logPath : undefined);
@@ -111,6 +114,40 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
         await this.handleAbort();
     }
 
+    private async importResumeHistoryIfNeeded(): Promise<void> {
+        const resumeSessionId = this.session.sessionId;
+        if (!resumeSessionId || this.importedResumeHistorySessionId === resumeSessionId) {
+            return;
+        }
+        if (process.env.HAPI_IMPORT_RESUME_HISTORY !== '1') {
+            return;
+        }
+
+        this.importedResumeHistorySessionId = resumeSessionId;
+        const events = await readCodexSessionEvents(resumeSessionId);
+        let imported = 0;
+
+        for (const event of events) {
+            const converted = convertCodexEvent(event);
+            if (converted?.sessionId) {
+                this.session.onSessionFound(converted.sessionId);
+            }
+            if (converted?.userMessage) {
+                this.session.sendUserMessage(converted.userMessage);
+                imported += 1;
+            }
+            if (converted?.message) {
+                this.session.sendCodexMessage(converted.message);
+                imported += 1;
+            }
+        }
+
+        if (imported > 0) {
+            logger.debug(`[Codex] Imported ${imported} messages from resume history ${resumeSessionId}`);
+            this.session.sendSessionEvent({ type: 'ready' });
+        }
+    }
+
     public async launch(): Promise<RemoteLauncherExitReason> {
         if (this.session.codexArgs && this.session.codexArgs.length > 0) {
             if (hasCodexCliOverrides(this.session.codexCliOverrides)) {
@@ -135,6 +172,8 @@ class CodexRemoteLauncher extends RemoteLauncherBase {
         const mcpClient = this.mcpClient;
         const appServerClient = this.appServerClient;
         const appServerEventConverter = useAppServer ? new AppServerEventConverter() : null;
+
+        await this.importResumeHistoryIfNeeded();
 
         const normalizeCommand = (value: unknown): string | undefined => {
             if (typeof value === 'string') {

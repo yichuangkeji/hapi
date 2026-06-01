@@ -10,6 +10,7 @@ export interface SpawnSessionOptions {
     token?: string
     sessionType?: 'simple' | 'worktree'
     worktreeName?: string
+    importResumeHistory?: boolean
 }
 
 export type SpawnSessionResult =

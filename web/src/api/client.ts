@@ -15,6 +15,7 @@ import type {
     PushSubscriptionPayload,
     PushUnsubscribePayload,
     PushVapidPublicKeyResponse,
+    ResumeRecordsResponse,
     SlashCommandsResponse,
     SkillsResponse,
     SpawnResponse,
@@ -271,6 +272,28 @@ export class ApiClient {
         const response = await this.request<{ sessionId: string }>(
             `/api/sessions/${encodeURIComponent(sessionId)}/resume`,
             { method: 'POST' }
+        )
+        return response.sessionId
+    }
+
+    async getResumeRecords(sessionId: string, agent?: string): Promise<ResumeRecordsResponse> {
+        const params = new URLSearchParams()
+        if (agent) {
+            params.set('agent', agent)
+        }
+        const qs = params.toString()
+        return await this.request<ResumeRecordsResponse>(
+            `/api/sessions/${encodeURIComponent(sessionId)}/resume-records${qs ? `?${qs}` : ''}`
+        )
+    }
+
+    async resumeRecord(sessionId: string, input: { resumeSessionId: string; agent?: string }): Promise<string> {
+        const response = await this.request<{ sessionId: string }>(
+            `/api/sessions/${encodeURIComponent(sessionId)}/resume-records/resume`,
+            {
+                method: 'POST',
+                body: JSON.stringify(input)
+            }
         )
         return response.sessionId
     }

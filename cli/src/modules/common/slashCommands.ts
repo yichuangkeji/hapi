@@ -26,6 +26,7 @@ export interface ListSlashCommandsResponse {
  */
 const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
     claude: [
+        { name: 'resume', description: 'Resume a previous conversation in the current directory', source: 'builtin' },
         { name: 'clear', description: 'Clear conversation history', source: 'builtin' },
         { name: 'compact', description: 'Compact conversation context', source: 'builtin' },
         { name: 'compat', description: 'Alias for /compact', source: 'builtin' },
@@ -34,16 +35,20 @@ const BUILTIN_COMMANDS: Record<string, SlashCommand[]> = {
         { name: 'plan', description: 'Toggle plan mode', source: 'builtin' },
     ],
     codex: [
+        { name: 'resume', description: 'Resume a previous conversation in the current directory', source: 'builtin' },
         { name: 'clear', description: 'Reset the current Codex conversation', source: 'builtin' },
         { name: 'compact', description: 'Compact conversation context', source: 'builtin' },
         { name: 'compat', description: 'Alias for /compact', source: 'builtin' },
     ],
     gemini: [
+        { name: 'resume', description: 'Resume a previous conversation in the current directory', source: 'builtin' },
         { name: 'about', description: 'About Gemini', source: 'builtin' },
         { name: 'clear', description: 'Clear conversation', source: 'builtin' },
         { name: 'compress', description: 'Compress context', source: 'builtin' },
     ],
-    opencode: [],
+    opencode: [
+        { name: 'resume', description: 'Resume a previous conversation in the current directory', source: 'builtin' },
+    ],
 };
 
 /**

@@ -101,6 +101,20 @@ export type SpawnResponse =
 
 export type ActivateSessionResponse = { type: 'success'; sessionId: string }
 
+export type ResumeRecord = {
+    id: string
+    agent: 'claude' | 'codex' | 'opencode'
+    title?: string
+    cwd?: string
+    updatedAt?: number
+}
+
+export type ResumeRecordsResponse = {
+    success: boolean
+    records?: ResumeRecord[]
+    error?: string
+}
+
 export type GitCommandResponse = {
     success: boolean
     stdout?: string

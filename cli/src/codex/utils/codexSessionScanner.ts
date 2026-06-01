@@ -58,6 +58,24 @@ export async function createCodexSessionScanner(opts: CodexSessionScannerOptions
     };
 }
 
+export async function readCodexSessionEvents(sessionId: string): Promise<CodexSessionEvent[]> {
+    const normalizedSessionId = sessionId.trim();
+    if (!normalizedSessionId) {
+        return [];
+    }
+
+    const codexHomeDir = process.env.CODEX_HOME || join(homedir(), '.codex');
+    const sessionsRoot = join(codexHomeDir, 'sessions');
+    const files = await listSessionFilesForId(sessionsRoot, normalizedSessionId);
+    const events: CodexSessionEvent[] = [];
+
+    for (const filePath of files.sort()) {
+        events.push(...await readAllEvents(filePath));
+    }
+
+    return events;
+}
+
 class CodexSessionScannerImpl extends BaseSessionScanner<CodexSessionEvent> {
     private readonly sessionsRoot: string;
     private readonly onEvent: (event: CodexSessionEvent) => void;
@@ -436,6 +454,54 @@ async function sortFilesByMtime(files: string[]): Promise<string[]> {
     return entries
         .sort((a, b) => b.mtimeMs - a.mtimeMs)
         .map((entry) => entry.file);
+}
+
+async function listSessionFilesForId(dir: string, sessionId: string): Promise<string[]> {
+    try {
+        const entries = await readdir(dir, { withFileTypes: true });
+        const results: string[] = [];
+        const suffix = `-${sessionId}.jsonl`;
+
+        for (const entry of entries) {
+            const full = join(dir, entry.name);
+            if (entry.isDirectory()) {
+                results.push(...await listSessionFilesForId(full, sessionId));
+            } else if (entry.isFile() && entry.name.endsWith(suffix)) {
+                results.push(full);
+            }
+        }
+
+        return results;
+    } catch {
+        return [];
+    }
+}
+
+async function readAllEvents(filePath: string): Promise<CodexSessionEvent[]> {
+    let content: string;
+    try {
+        content = await readFile(filePath, 'utf-8');
+    } catch {
+        return [];
+    }
+
+    const events: CodexSessionEvent[] = [];
+    for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+            continue;
+        }
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (parsed && typeof parsed === 'object' && typeof parsed.type === 'string') {
+                events.push(parsed as CodexSessionEvent);
+            }
+        } catch (error) {
+            logger.debug(`[CODEX_SESSION_SCANNER] Failed to parse history line: ${error}`);
+        }
+    }
+
+    return events;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

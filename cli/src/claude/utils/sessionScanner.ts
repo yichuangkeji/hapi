@@ -41,6 +41,13 @@ export async function createSessionScanner(opts: {
 
 export type SessionScanner = ReturnType<typeof createSessionScanner>;
 
+export async function readClaudeSessionMessages(sessionId: string, workingDirectory: string): Promise<RawJSONLines[]> {
+    const projectDir = getProjectPath(workingDirectory);
+    const sessionFile = join(projectDir, `${sessionId}.jsonl`);
+    const { events } = await readSessionLog(sessionFile, 0);
+    return events.map((entry) => entry.event);
+}
+
 
 class ClaudeSessionScanner extends BaseSessionScanner<RawJSONLines> {
     private readonly projectDir: string;

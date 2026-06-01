@@ -18,6 +18,11 @@ const renameSessionSchema = z.object({
     name: z.string().min(1).max(255)
 })
 
+const resumeRecordSchema = z.object({
+    resumeSessionId: z.string().min(1),
+    agent: z.enum(['claude', 'codex', 'cursor', 'gemini', 'opencode']).optional()
+})
+
 const uploadSchema = z.object({
     filename: z.string().min(1).max(255),
     content: z.string().min(1),
@@ -98,6 +103,53 @@ export function createSessionsRoutes(getSyncEngine: () => SyncEngine | null): Ho
 
         const namespace = c.get('namespace')
         const result = await engine.resumeSession(sessionResult.sessionId, namespace)
+        if (result.type === 'error') {
+            const status = result.code === 'no_machine_online' ? 503
+                : result.code === 'access_denied' ? 403
+                    : result.code === 'session_not_found' ? 404
+                        : 500
+            return c.json({ error: result.message, code: result.code }, status)
+        }
+
+        return c.json({ type: 'success', sessionId: result.sessionId })
+    })
+
+    app.get('/sessions/:id/resume-records', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        const agent = c.req.query('agent')
+        const namespace = c.get('namespace')
+        const result = await engine.listResumeRecords(sessionResult.sessionId, namespace, agent)
+        return c.json(result)
+    })
+
+    app.post('/sessions/:id/resume-records/resume', async (c) => {
+        const engine = requireSyncEngine(c, getSyncEngine)
+        if (engine instanceof Response) {
+            return engine
+        }
+
+        const sessionResult = requireSessionFromParam(c, engine)
+        if (sessionResult instanceof Response) {
+            return sessionResult
+        }
+
+        const body = await c.req.json().catch(() => null)
+        const parsed = resumeRecordSchema.safeParse(body)
+        if (!parsed.success) {
+            return c.json({ error: 'Invalid body' }, 400)
+        }
+
+        const namespace = c.get('namespace')
+        const result = await engine.resumeRecord(sessionResult.sessionId, namespace, parsed.data)
         if (result.type === 'error') {
             const status = result.code === 'no_machine_online' ? 503
                 : result.code === 'access_denied' ? 403

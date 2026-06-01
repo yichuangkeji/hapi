@@ -338,6 +338,12 @@ export async function startRunner(): Promise<void> {
             HAPI_WORKTREE_CREATED_AT: String(worktreeInfo.createdAt)
           };
         }
+        if (options.importResumeHistory) {
+          extraEnv = {
+            ...extraEnv,
+            HAPI_IMPORT_RESUME_HISTORY: '1'
+          };
+        }
 
         // Construct arguments for the CLI
         const agentCommand = agent === 'codex'

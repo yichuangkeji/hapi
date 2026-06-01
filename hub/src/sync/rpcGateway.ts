@@ -44,6 +44,20 @@ export type RpcPathExistsResponse = {
     exists: Record<string, boolean>
 }
 
+export type RpcResumeRecord = {
+    id: string
+    agent: 'claude' | 'codex' | 'opencode'
+    title?: string
+    cwd?: string
+    updatedAt?: number
+}
+
+export type RpcResumeRecordsResponse = {
+    success: boolean
+    records?: RpcResumeRecord[]
+    error?: string
+}
+
 export class RpcGateway {
     constructor(
         private readonly io: Server,
@@ -119,13 +133,14 @@ export class RpcGateway {
         yolo?: boolean,
         sessionType?: 'simple' | 'worktree',
         worktreeName?: string,
-        resumeSessionId?: string
+        resumeSessionId?: string,
+        importResumeHistory?: boolean
     ): Promise<{ type: 'success'; sessionId: string } | { type: 'error'; message: string }> {
         try {
             const result = await this.machineRpc(
                 machineId,
                 'spawn-happy-session',
-                { type: 'spawn-in-directory', directory, agent, model, yolo, sessionType, worktreeName, resumeSessionId }
+                { type: 'spawn-in-directory', directory, agent, model, yolo, sessionType, worktreeName, resumeSessionId, importResumeHistory }
             )
             if (result && typeof result === 'object') {
                 const obj = result as Record<string, unknown>
@@ -220,6 +235,10 @@ export class RpcGateway {
             commands?: Array<{ name: string; description?: string; source: 'builtin' | 'user' | 'plugin' | 'project' }>
             error?: string
         }
+    }
+
+    async listResumeRecords(sessionId: string, agent: string): Promise<RpcResumeRecordsResponse> {
+        return await this.sessionRpc(sessionId, 'listResumeRecords', { agent }) as RpcResumeRecordsResponse
     }
 
     async listSkills(sessionId: string): Promise<{
